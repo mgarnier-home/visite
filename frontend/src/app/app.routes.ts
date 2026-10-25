@@ -1,7 +1,13 @@
+import type { TemplatePage } from './features/template/template.page';
 import { Routes } from '@angular/router';
 
 export const routes: Routes = [
   { path: '', loadComponent: () => import('./features/home/home.page').then((m) => m.HomePage) },
+  {
+    path: 'template',
+    loadComponent: () => import('./features/template/template.page').then((m) => m.TemplatePage),
+    canDeactivate: [(page: TemplatePage) => page.canLeave()],
+  },
   { path: 'new', loadComponent: () => import('./features/create/create.page').then((m) => m.CreatePage) },
   {
     path: 'v/:code',
