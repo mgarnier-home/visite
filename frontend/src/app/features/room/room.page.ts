@@ -13,6 +13,7 @@ import { getDeviceId } from '../../core/device-id';
 import { LocalStore } from '../../core/local-store';
 import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
+import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
 import { PhotoButtonComponent, photoErrorMessage } from '../../shared/photo-button.component';
 import { AddPointDialog } from './add-point.dialog';
 import { AddQuestionDialog } from './add-question.dialog';
@@ -25,7 +26,7 @@ type AuthorMap = Partial<Record<SharedField, number>>;
 /** Écran d'une pièce : points, questions, commentaire privé et photos. */
 @Component({
   selector: 'app-room-page',
-  imports: [RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, PhotoButtonComponent, PointCardComponent],
+  imports: [RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, NumericDirective, PhotoButtonComponent, PointCardComponent],
   templateUrl: './room.page.html',
   styleUrl: './room.page.scss',
 })
@@ -234,17 +235,12 @@ export class RoomPage {
 
   protected onInput(key: string, event: Event): void {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement;
-    if (input instanceof HTMLInputElement && input.validity.badInput) {
-      this.dropDraft(key); // saisie partielle invalide : rien à enregistrer
-      return;
-    }
     this.drafts.update((d) => ({ ...d, [key]: input.value }));
   }
 
   /** Perte du focus : enregistre le brouillon, ou la valeur du champ si aucun brouillon n'existe. */
   protected onBlur(key: string, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement;
-    if (input instanceof HTMLInputElement && input.validity.badInput) return Promise.resolve();
     if (!(key in this.drafts())) this.drafts.update((d) => ({ ...d, [key]: input.value }));
     return this.flushKey(key);
   }
@@ -275,11 +271,10 @@ export class RoomPage {
       const current = s?.comments.find((c) => c.room_id === id)?.text ?? '';
       if (text !== current) saved = await this.run('set_comment', { room_id: id, text });
     } else if (kind === 'area') {
-      const raw = text.trim();
-      const value = raw === '' ? null : Number(raw);
+      const value = parseNumeric(text);
       const current = s?.shared.find((v) => v.target_id === id && v.field === 'area_m2')?.value;
       const currentNum = typeof current === 'number' ? current : null;
-      if ((value === null || (Number.isFinite(value) && value >= 0)) && value !== currentNum) {
+      if ((value !== null || text.trim() === '') && value !== currentNum) {
         saved = await this.setShared(id, 'area_m2', value);
       }
     }

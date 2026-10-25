@@ -131,9 +131,10 @@ describe('PointCardComponent', () => {
     works.value = '1200';
     works.dispatchEvent(new Event('change'));
     expect(host.setWorks).toHaveBeenLastCalledWith(1200);
-    works.value = '-3';
+    works.value = ',';
     works.dispatchEvent(new Event('change'));
     expect(host.setWorks).toHaveBeenCalledTimes(2);
+    expect(works.value).toBe('500');
   });
 
   it('menu : Échap, même depuis le champ Travaux, ferme le menu', async () => {

@@ -1,9 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Fiche } from '../../core/api.types';
 import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compute';
 import { formatEur } from '../../core/format';
 import { localIsoWithOffset, SyncService } from '../../core/sync.service';
+import { NumericDirective, NumericMode, parseNumeric } from '../../shared/numeric.directive';
 
 type FicheKind = 'text' | 'eur' | 'number' | 'integer' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
 interface FicheField {
@@ -27,6 +28,7 @@ function toLocalInput(iso: string | null): string {
 /** Fiche du bien : lecture seule, ou formulaire pour le créateur de la visite. */
 @Component({
   selector: 'app-fiche-tab',
+  imports: [NumericDirective],
   templateUrl: './fiche-tab.component.html',
   styleUrl: './fiche-tab.component.scss',
 })
@@ -60,8 +62,6 @@ export class FicheTabComponent {
   protected readonly fiche = computed(() => this.state()?.visit.fiche ?? null);
   protected readonly editable = computed(() => !!this.state()?.visit.is_creator);
   protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
-  /** Message d'erreur par champ, pour la dernière saisie refusée. */
-  protected readonly errors = signal<Partial<Record<keyof Fiche, string>>>({});
 
   protected readonly computedRows = computed(() => {
     const s = this.state();
@@ -115,10 +115,6 @@ export class FicheTabComponent {
 
   protected inputType(kind: FicheKind): string {
     switch (kind) {
-      case 'eur':
-      case 'number':
-      case 'integer':
-        return 'number';
       case 'datetime':
         return 'datetime-local';
       case 'text':
@@ -128,14 +124,24 @@ export class FicheTabComponent {
     }
   }
 
+  /** Mode du filtre numérique d'un champ, `null` si le champ n'est pas numérique. */
+  protected numericMode(kind: FicheKind): NumericMode | null {
+    switch (kind) {
+      case 'eur':
+      case 'integer':
+        return 'integer';
+      case 'number':
+        return 'decimal';
+      default:
+        return null;
+    }
+  }
+
   /** Champ modifié : envoie `set_fiche` si la valeur valide diffère de l'état, sinon restaure l'affichage. */
   protected async onChange(field: FicheField, event: Event): Promise<void> {
     const el = event.target as HTMLInputElement | HTMLSelectElement;
     const current = this.fiche()?.[field.name] ?? null;
     const next = this.parse(field, el);
-    const raw = el.value.trim();
-    const decimal = field.kind === 'integer' && raw !== '' && !Number.isInteger(Number(raw));
-    this.setError(field, decimal ? 'Nombre entier attendu' : null);
     if (next === undefined || next === current || this.sameInstant(field, next, current)) {
       if (next === undefined) el.value = this.inputValue(field);
       return;
@@ -149,19 +155,13 @@ export class FicheTabComponent {
 
   /** Valeur à envoyer ; `undefined` si la saisie est invalide (ignorée). */
   private parse(field: FicheField, el: HTMLInputElement | HTMLSelectElement): string | number | null | undefined {
-    if (el instanceof HTMLInputElement && el.validity.badInput) return undefined;
     const raw = el.value.trim();
     switch (field.kind) {
       case 'eur':
-      case 'number': {
-        if (raw === '') return null;
-        const n = Number(raw);
-        return Number.isFinite(n) && n >= 0 ? n : undefined;
-      }
+      case 'number':
       case 'integer': {
         if (raw === '') return null;
-        const n = Number(raw);
-        return Number.isInteger(n) && n >= 0 ? n : undefined;
+        return parseNumeric(raw) ?? undefined; // « , » seul : saisie ignorée
       }
       case 'datetime': {
         if (raw === '') return null;
@@ -174,13 +174,6 @@ export class FicheTabComponent {
       default:
         return raw === '' ? null : raw;
     }
-  }
-
-  private setError(field: FicheField, message: string | null): void {
-    this.errors.update((all) => {
-      const { [field.name]: _, ...rest } = all;
-      return message ? { ...rest, [field.name]: message } : rest;
-    });
   }
 
   private sameInstant(field: FicheField, next: unknown, current: unknown): boolean {

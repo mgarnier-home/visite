@@ -116,31 +116,32 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
-  it('nombres : vide → null, valeur négative ignorée', () => {
+  it('nombres : vide → null, virgule décimale lue comme un point', () => {
     const { el } = setup();
     change(field<HTMLInputElement>(el, 'price_eur'), '');
     expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { price_eur: null } });
     sync.dispatch.mockClear();
-    change(field<HTMLInputElement>(el, 'living_area_m2'), '-5');
+    change(field<HTMLInputElement>(el, 'living_area_m2'), '85,5');
+    expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { living_area_m2: 85.5 } });
+    sync.dispatch.mockClear();
+    change(field<HTMLInputElement>(el, 'living_area_m2'), ',');
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
-  it('nombres entiers (pièces, chambres, année) : pas de 1, décimale refusée avec un message', () => {
-    const { fixture, el } = setup();
-    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
+  it('champs numériques : texte filtré (entier pour prix, pièces, chambres, année ; décimal pour les surfaces)', () => {
+    const { el } = setup();
+    for (const name of ['price_eur', 'rooms_count', 'bedrooms_count', 'construction_year']) {
       const input = field<HTMLInputElement>(el, name);
-      expect(input.getAttribute('step')).toBe('1');
+      expect(input.type).toBe('text');
       expect(input.getAttribute('inputmode')).toBe('numeric');
     }
-    expect(field<HTMLInputElement>(el, 'living_area_m2').getAttribute('step')).toBe('any');
-    change(field<HTMLInputElement>(el, 'rooms_count'), '2.5');
-    fixture.detectChanges();
-    expect(sync.dispatch).not.toHaveBeenCalled();
-    expect(text(el, '[data-test=error-rooms_count]')).toBe('Nombre entier attendu');
+    for (const name of ['living_area_m2', 'floor_area_m2', 'land_area_m2']) {
+      const input = field<HTMLInputElement>(el, name);
+      expect(input.type).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('decimal');
+    }
     change(field<HTMLInputElement>(el, 'rooms_count'), '4');
-    fixture.detectChanges();
     expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { rooms_count: 4 } });
-    expect(el.querySelector('[data-test=error-rooms_count]')).toBeNull();
   });
 
   it('DPE : sélection d\'une classe et retour à « — »', () => {

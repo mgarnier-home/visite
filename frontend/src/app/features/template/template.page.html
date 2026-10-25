@@ -54,7 +54,7 @@
                   @if (s.kind === 'summary') {
                     <mat-form-field appearance="outline" class="weight">
                       <mat-label>Poids</mat-label>
-                      <input matInput [disabled]="saving()" type="number" min="0" step="any" data-test="point-weight" [value]="weightDrafts()[p.id] ?? p.weight" (input)="setPointWeight(si, pi, $any($event.target).value)" />
+                      <input matInput [disabled]="saving()" type="text" appNumeric="decimal" data-test="point-weight" [value]="weightDrafts()[p.id] ?? p.weight" (input)="setPointWeight(si, pi, $any($event.target).value)" />
                     </mat-form-field>
                     @if (weightError(p.id)) {
                       <span class="field-error" role="alert" data-test="weight-error">Le poids doit être supérieur à 0</span>

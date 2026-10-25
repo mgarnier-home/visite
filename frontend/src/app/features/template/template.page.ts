@@ -12,17 +12,18 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { PointType, SectionKind, Template, TemplateSection } from '../../core/api.types';
+import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
 import { ConfirmDialog } from '../room/confirm.dialog';
 
 const clone = <T>(value: T): T => structuredClone(value);
-const isPositiveNumber = (raw: string): boolean => raw.trim() !== '' && Number.isFinite(Number(raw)) && Number(raw) > 0;
+const isPositiveNumber = (raw: string): boolean => (parseNumeric(raw) ?? 0) > 0;
 
 /** Éditeur du modèle de visite (écran 5) : sections, points, questions et liste « À emporter ». */
 @Component({
   selector: 'app-template-page',
   imports: [
     CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatChipsModule,
-    MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule,
+    MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, NumericDirective,
   ],
   templateUrl: './template.page.html',
   styleUrl: './template.page.scss',
@@ -201,7 +202,7 @@ export class TemplatePage implements OnInit {
   protected setPointWeight(si: number, pi: number, raw: string): void {
     const id = this.draft()!.sections[si].points[pi].id;
     this.weightDrafts.update((d) => ({ ...d, [id]: raw }));
-    if (isPositiveNumber(raw)) this.edit((t) => (t.sections[si].points[pi].weight = Number(raw)));
+    if (isPositiveNumber(raw)) this.edit((t) => (t.sections[si].points[pi].weight = parseNumeric(raw)!));
   }
 
   protected weightError(id: string): boolean {

@@ -186,41 +186,32 @@ describe('CreatePage', () => {
     expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
   });
 
-  it('refuse un nombre négatif', async () => {
+  it('convertit les surfaces saisies avec une virgule', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
     const { fixture, el, submit } = setup();
     type(el, '[data-test=address]', 'x');
     type(el, '[data-test=code]', 'maison-x');
-    type(el, '[data-test=price]', '-5');
-    (el.querySelector('[data-test=price]') as HTMLInputElement).dispatchEvent(new Event('blur'));
+    type(el, '[data-test=living-area]', '85,5');
+    type(el, '[data-test=rooms_count]', '4');
     await settle(fixture, 300);
-    expect(submit().disabled).toBe(true);
-    expect(el.textContent).toContain('Doit être positif ou nul');
+    submit().click();
+    await settle(fixture);
+    const fiche = api.create.mock.calls[0][0].fiche;
+    expect(fiche.living_area_m2).toBe(85.5);
+    expect(fiche.rooms_count).toBe(4);
+    expect(fiche.floor_area_m2).toBeNull();
   });
 
-  it('refuse un nombre décimal pour les pièces, les chambres et l\'année', async () => {
-    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [CreatePage],
-        providers: [
-          { provide: ApiClient, useValue: api },
-          { provide: LocalStore, useValue: store },
-          provideRouter([]),
-        ],
-      });
-      const { fixture, el, submit } = setup();
-      type(el, '[data-test=address]', 'x');
-      type(el, '[data-test=code]', 'maison-x');
+  it('champs numériques en texte filtré', () => {
+    const { el } = setup();
+    for (const name of ['price', 'rooms_count', 'bedrooms_count', 'construction_year']) {
       const input = el.querySelector(`[data-test=${name}]`) as HTMLInputElement;
-      expect(input.getAttribute('step')).toBe('1');
-      type(el, `[data-test=${name}]`, '2.5');
-      input.dispatchEvent(new Event('blur'));
-      await settle(fixture, 300);
-      expect(submit().disabled).toBe(true);
-      expect(el.textContent).toContain('Nombre entier attendu');
-      type(el, `[data-test=${name}]`, '3');
-      await settle(fixture);
-      expect(submit().disabled).toBe(false);
+      expect(input.type).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('numeric');
     }
+    const area = el.querySelector('[data-test=living-area]') as HTMLInputElement;
+    expect(area.type).toBe('text');
+    expect(area.getAttribute('inputmode')).toBe('decimal');
   });
+
 });

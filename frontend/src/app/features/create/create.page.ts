@@ -1,6 +1,6 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,15 +13,10 @@ import { CODE_RE, normalizeCode } from '../../core/code';
 import { LocalStore } from '../../core/local-store';
 import { localIsoWithOffset } from '../../core/sync.service';
 import { normalizeCodeWhileTyping } from '../code-typing';
+import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
 
 type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
 
-const numberControl = () => new FormControl<number | null>(null, { validators: [Validators.min(0)] });
-/** Refuse une valeur décimale (nombre de pièces, de chambres, année). */
-const integerValidator = (c: AbstractControl): ValidationErrors | null =>
-  c.value === null || c.value === '' || Number.isInteger(c.value) ? null : { integer: true };
-const integerControl = () =>
-  new FormControl<number | null>(null, { validators: [Validators.min(0), integerValidator] });
 const textControl = () => new FormControl<string>('', { nonNullable: true });
 
 /** Classes énergétiques du DPE ; `null` = non renseigné. */
@@ -29,7 +24,7 @@ export const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 @Component({
   selector: 'app-create-page',
-  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [ReactiveFormsModule, NumericDirective, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   templateUrl: './create.page.html',
   styleUrl: './create.page.scss',
 })
@@ -47,19 +42,19 @@ export class CreatePage {
 
   protected readonly form = {
     address: new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }),
-    price_eur: numberControl(),
-    living_area_m2: numberControl(),
-    floor_area_m2: numberControl(),
-    land_area_m2: numberControl(),
+    price_eur: textControl(),
+    living_area_m2: textControl(),
+    floor_area_m2: textControl(),
+    land_area_m2: textControl(),
     visit_at: textControl(),
     agent_name: textControl(),
     agent_phone: textControl(),
     agent_email: textControl(),
-    construction_year: integerControl(),
+    construction_year: textControl(),
     dpe_energy: new FormControl<string | null>(null),
     dpe_ges: new FormControl<string | null>(null),
-    rooms_count: integerControl(),
-    bedrooms_count: integerControl(),
+    rooms_count: textControl(),
+    bedrooms_count: textControl(),
     listing_url: textControl(),
     heating_type: textControl(),
   };
@@ -127,19 +122,19 @@ export class CreatePage {
     const visitAt = f.visit_at.value ? new Date(f.visit_at.value) : null;
     return {
       address: f.address.value.trim(),
-      price_eur: f.price_eur.value,
-      living_area_m2: f.living_area_m2.value,
-      floor_area_m2: f.floor_area_m2.value,
-      land_area_m2: f.land_area_m2.value,
+      price_eur: parseNumeric(f.price_eur.value),
+      living_area_m2: parseNumeric(f.living_area_m2.value),
+      floor_area_m2: parseNumeric(f.floor_area_m2.value),
+      land_area_m2: parseNumeric(f.land_area_m2.value),
       visit_at: visitAt && !Number.isNaN(visitAt.getTime()) ? localIsoWithOffset(visitAt) : null,
       agent_name: this.text(f.agent_name.value),
       agent_phone: this.text(f.agent_phone.value),
       agent_email: this.text(f.agent_email.value),
-      construction_year: f.construction_year.value,
+      construction_year: parseNumeric(f.construction_year.value),
       dpe_energy: f.dpe_energy.value,
       dpe_ges: f.dpe_ges.value,
-      rooms_count: f.rooms_count.value,
-      bedrooms_count: f.bedrooms_count.value,
+      rooms_count: parseNumeric(f.rooms_count.value),
+      bedrooms_count: parseNumeric(f.bedrooms_count.value),
       listing_url: this.text(f.listing_url.value),
       heating_type: this.text(f.heating_type.value),
     };
