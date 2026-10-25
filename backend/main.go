@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
@@ -50,7 +49,7 @@ func main() {
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Infof("écoute sur %s", addr)
 
-	if err := http.ListenAndServe(addr, router); err != nil {
+	if err := newServer(addr, router).ListenAndServe(); err != nil {
 		log.Errorf("arrêt du serveur : %v", err)
 		st.Close()
 		os.Exit(1)

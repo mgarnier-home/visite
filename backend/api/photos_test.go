@@ -240,3 +240,20 @@ func TestRefusedPhotoUploadLeavesNoFile(t *testing.T) {
 		t.Errorf("id déjà pris : %d fichier(s) écrit(s)", n)
 	}
 }
+
+func TestPhotoDownloadHeaders(t *testing.T) {
+	router := newTestRouter(t)
+	createVisit(t, router, "maison-a", devA)
+	wantCode(t, uploadPhoto(t, router, "maison-a", devA, validForm("")), 201)
+	get := do(t, router, "GET", "/api/visits/maison-a/photos/"+testPhotoID, devA, "")
+	wantCode(t, get, http.StatusOK)
+	for name, want := range map[string]string{
+		"Content-Type":           "image/jpeg",
+		"X-Content-Type-Options": "nosniff",
+		"Cache-Control":          "private, max-age=31536000, immutable",
+	} {
+		if got := get.Header().Get(name); got != want {
+			t.Errorf("%s = %q, attendu %q", name, got, want)
+		}
+	}
+}

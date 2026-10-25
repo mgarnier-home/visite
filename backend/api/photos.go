@@ -167,5 +167,11 @@ func (h *handlers) getPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", "image/jpeg")
-	_, _ = io.Copy(w, f)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Une photo ne change jamais pour un id donné ; privée car liée à l'appareil (?d=).
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	// Les en-têtes sont partis : une erreur de copie (client parti) est seulement journalisée.
+	if _, err := io.Copy(w, f); err != nil && h.log != nil {
+		h.log.Errorf("envoi de la photo %s : %v", rel, err)
+	}
 }
