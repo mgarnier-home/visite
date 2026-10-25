@@ -1,0 +1,69 @@
+<section class="summary">
+  <div class="points">
+    @for (p of points(); track p.point.id) {
+      <app-point-card
+        [point]="p.point"
+        [myRating]="p.rating"
+        [shared]="p.shared"
+        [authors]="p.authors"
+        [disabled]="closed()"
+        [showWeight]="true"
+        (rate)="rate(p.point.id, $event)"
+        (setValue)="setShared(p.point.id, 'value', $event)"
+        (setBlocking)="setShared(p.point.id, 'blocking', $event)"
+        (setWorks)="setShared(p.point.id, 'works_eur', $event)"
+      />
+    }
+  </div>
+
+  <p class="score" data-test="score">{{ scoreText() }}</p>
+
+  <h2>Points bloquants</h2>
+  @if (blocking().length > 0) {
+    <ul data-test="blocking">
+      @for (b of blocking(); track b.id) {
+        <li>{{ b.text }}</li>
+      }
+    </ul>
+  } @else {
+    <p data-test="no-blocking">Aucun point bloquant</p>
+  }
+
+  <dl class="totals">
+    <div class="row">
+      <dt>Total des travaux</dt>
+      <dd data-test="works">{{ worksText() }}</dd>
+    </div>
+    <div class="row">
+      <dt>Prix réel</dt>
+      <dd data-test="real-price">{{ realPriceText() }}</dd>
+    </div>
+  </dl>
+
+  @if (unasked() > 0) {
+    <div class="alert" role="alert" data-test="unasked">
+      <mat-icon svgIcon="warning" />
+      <span>
+        {{ unasked() }} {{ unasked() > 1 ? 'questions non posées' : 'question non posée' }}
+        <a [routerLink]="['/v', code(), 'questions']">Voir</a>
+      </span>
+    </div>
+  }
+
+  <div class="actions">
+    <button mat-flat-button type="button" data-test="export" (click)="exportCsv()">
+      <mat-icon svgIcon="download" />
+      Exporter le CSV
+    </button>
+    <button mat-stroked-button type="button" data-test="copy" (click)="copyForSheets()">
+      <mat-icon svgIcon="content_copy" />
+      Copier pour Sheets
+    </button>
+    @if (isCreator()) {
+      <button mat-stroked-button type="button" data-test="close" [disabled]="closed()" (click)="closeVisit()">
+        <mat-icon svgIcon="lock" />
+        Clôturer la visite
+      </button>
+    }
+  </div>
+</section>

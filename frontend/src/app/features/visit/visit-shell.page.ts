@@ -1,11 +1,13 @@
 import { Component, DestroyRef, OnDestroy, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { MatBadgeModule } from '@angular/material/badge';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ApiClient, ApiError } from '../../core/api.client';
+import { unaskedCount } from '../../core/compute';
 import { LocalStore } from '../../core/local-store';
 import { SyncService } from '../../core/sync.service';
 import { SyncIndicatorComponent } from './sync-indicator.component';
@@ -18,6 +20,7 @@ type Phase = 'loading' | 'ready' | 'network' | 'notfound' | 'error';
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
+    MatBadgeModule,
     MatButtonModule,
     MatIconModule,
     MatTabsModule,
@@ -41,6 +44,10 @@ export class VisitShellPage implements OnDestroy {
 
   protected readonly title = computed(() => this.sync.state()?.visit.fiche.address.trim() || this.code());
   protected readonly closed = computed(() => !!this.sync.state()?.visit.closed_at);
+  protected readonly unasked = computed(() => {
+    const s = this.sync.state();
+    return s ? unaskedCount(s) : 0;
+  });
   protected readonly tabs = [
     { path: 'rooms', label: 'Pièces' },
     { path: 'questions', label: 'Questions' },

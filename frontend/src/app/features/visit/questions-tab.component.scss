@@ -1,0 +1,29 @@
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 24px;
+
+  h2 {
+    margin: 8px 0 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    font: var(--mat-sys-body-large);
+  }
+}

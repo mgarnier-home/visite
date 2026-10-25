@@ -13,6 +13,18 @@ export const routes: Routes = [
         loadComponent: () => import('./features/visit/rooms-tab.component').then((m) => m.RoomsTabComponent),
       },
       {
+        path: 'questions',
+        loadComponent: () => import('./features/visit/questions-tab.component').then((m) => m.QuestionsTabComponent),
+      },
+      {
+        path: 'fiche',
+        loadComponent: () => import('./features/visit/fiche-tab.component').then((m) => m.FicheTabComponent),
+      },
+      {
+        path: 'bilan',
+        loadComponent: () => import('./features/visit/summary-tab.component').then((m) => m.SummaryTabComponent),
+      },
+      {
         path: 'room/:roomId',
         loadComponent: () => import('./features/room/room.page').then((m) => m.RoomPage),
       },

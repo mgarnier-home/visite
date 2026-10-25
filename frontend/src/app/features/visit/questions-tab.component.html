@@ -1,0 +1,32 @@
+<section class="questions">
+  <mat-slide-toggle data-test="unasked-only" [checked]="unaskedOnly()" (change)="unaskedOnly.set($event.checked)">
+    Non posées seulement
+  </mat-slide-toggle>
+
+  @for (g of groups(); track g.room.id) {
+    <h2 data-test="room-name">{{ g.room.name }}</h2>
+    @for (q of g.questions; track q.question.id) {
+      <article class="question">
+        <p data-test="question-text">{{ q.question.text }}</p>
+        <mat-checkbox
+          data-test="asked"
+          [checked]="q.asked"
+          [disabled]="closed()"
+          (change)="setAsked(q.question.id, $event.checked)"
+        >Posée</mat-checkbox>
+        <textarea
+          data-test="answer"
+          rows="2"
+          aria-label="Réponse"
+          placeholder="Réponse"
+          [value]="shown(q.question.id, q.answer)"
+          [disabled]="closed()"
+          (input)="onInput(q.question.id, $event)"
+          (blur)="onBlur(q.question.id, $event)"
+        ></textarea>
+      </article>
+    }
+  } @empty {
+    <p data-test="empty">{{ total() === 0 ? 'Aucune question' : 'Toutes les questions ont été posées' }}</p>
+  }
+</section>

@@ -1,0 +1,77 @@
+<section class="fiche">
+  @if (fiche(); as f) {
+    @if (editable()) {
+      <form class="form" (submit)="$event.preventDefault()">
+        @for (field of fields; track field.name) {
+          <label class="field">
+            <span>{{ field.label }}</span>
+            @if (field.kind === 'dpe') {
+              <select [attr.data-field]="field.name" [disabled]="closed()" (change)="onChange(field, $event)">
+                <option value="" [selected]="!inputValue(field)">—</option>
+                @for (c of dpeClasses; track c) {
+                  <option [value]="c" [selected]="inputValue(field) === c">{{ c }}</option>
+                }
+              </select>
+            } @else {
+              <input
+                [attr.data-field]="field.name"
+                [type]="inputType(field.kind)"
+                [attr.inputmode]="field.kind === 'number' || field.kind === 'eur' ? 'decimal' : null"
+                [attr.min]="field.kind === 'number' || field.kind === 'eur' ? 0 : null"
+                [attr.step]="field.kind === 'number' || field.kind === 'eur' ? 'any' : null"
+                autocomplete="off"
+                autocapitalize="none"
+                [value]="inputValue(field)"
+                [disabled]="closed()"
+                (change)="onChange(field, $event)"
+              />
+            }
+          </label>
+        }
+      </form>
+    } @else {
+      <dl class="readonly">
+        @for (field of fields; track field.name) {
+          <div class="row" [attr.data-field]="field.name">
+            <dt>{{ field.label }}</dt>
+            <dd>
+              @if (link(field); as href) {
+                @if (field.kind === 'url') {
+                  <a [href]="href" target="_blank" rel="noopener">{{ display(field) }}</a>
+                } @else {
+                  <a [href]="href">{{ display(field) }}</a>
+                }
+              } @else {
+                {{ display(field) }}
+              }
+            </dd>
+          </div>
+        }
+      </dl>
+    }
+
+    @if (editable()) {
+      <ul class="links">
+        @if (link(byName.agent_phone); as tel) {
+          <li><a [href]="tel">Appeler l'agent</a></li>
+        }
+        @if (link(byName.agent_email); as mail) {
+          <li><a [href]="mail">Écrire à l'agent</a></li>
+        }
+        @if (link(byName.listing_url); as url) {
+          <li><a [href]="url" target="_blank" rel="noopener">Ouvrir l'annonce</a></li>
+        }
+      </ul>
+    }
+
+    <h2>Calculs</h2>
+    <dl class="readonly computed">
+      @for (row of computedRows(); track row.id) {
+        <div class="row">
+          <dt>{{ row.label }}</dt>
+          <dd [attr.data-test]="row.id">{{ row.value }}</dd>
+        </div>
+      }
+    </dl>
+  }
+</section>

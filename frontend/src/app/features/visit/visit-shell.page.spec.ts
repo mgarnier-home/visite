@@ -12,7 +12,16 @@ import { provideAppIcons } from '../../shared/icons';
 import { VisitShellPage } from './visit-shell.page';
 
 const stateOf = (address: string, closed = false) =>
-  ({ seq: 1, visit: { code: 'maison-x', closed_at: closed ? 'x' : null, fiche: { address } } }) as unknown as VisitState;
+  ({
+    seq: 1,
+    visit: { code: 'maison-x', closed_at: closed ? 'x' : null, fiche: { address } },
+    rooms: [{ id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false }],
+    questions: [
+      { id: 'q1', room_id: 'r1', text: 'a', position: 1 },
+      { id: 'q2', room_id: 'r1', text: 'b', position: 2 },
+    ],
+    shared: [{ target_id: 'q2', field: 'asked', value: true, updated_at: 1, author: 1 }],
+  }) as unknown as VisitState;
 
 describe('VisitShellPage', () => {
   const state = signal<VisitState | null>(null);
@@ -63,11 +72,22 @@ describe('VisitShellPage', () => {
     expect(sync.open).toHaveBeenCalledWith('maison-x');
     expect(api.join).not.toHaveBeenCalled();
     expect(text(el, '[data-test=title]')).toBe('12 rue des Lilas');
-    expect(Array.from(el.querySelectorAll('a[mat-tab-link]')).map((a) => a.textContent?.trim())).toEqual([
+    expect(Array.from(el.querySelectorAll('a[mat-tab-link]')).map((a) => a.textContent?.replace(/\d+$/, '').trim())).toEqual([
       'Pièces', 'Questions', 'Fiche', 'Bilan',
     ]);
     fixture.destroy();
     expect(sync.close).toHaveBeenCalled();
+  });
+
+  it('badge des questions non posées sur l\'onglet Questions, masqué à 0', async () => {
+    const { fixture, el } = await setup();
+    const badge = () => el.querySelectorAll('a[mat-tab-link]')[1].querySelector('.mat-badge-content');
+    expect(badge()?.textContent?.trim()).toBe('1');
+    expect(el.querySelectorAll('a[mat-tab-link]')[0].querySelector('.mat-badge-content')).toBeNull();
+    state.set({ ...stateOf('x'), shared: [] , questions: [] } as unknown as VisitState);
+    fixture.detectChanges();
+    const b = badge();
+    expect(!b || b.closest('.mat-badge-hidden') !== null || b.parentElement?.classList.contains('mat-badge-hidden')).toBe(true);
   });
 
   it('affiche le code quand l\'adresse est vide', async () => {
