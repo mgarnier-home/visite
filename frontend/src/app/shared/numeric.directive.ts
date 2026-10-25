@@ -35,6 +35,11 @@ export function parseNumeric(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Affichage d'un nombre dans un champ : virgule décimale (`85,5`), vide pour `null`. */
+export function formatNumeric(n: number | null): string {
+  return n === null ? '' : String(n).replace('.', ',');
+}
+
 /** Limite un champ texte à un nombre entier ou décimal : frappe, collage et saisie du clavier virtuel. */
 @Directive({
   selector: 'input[appNumeric]',

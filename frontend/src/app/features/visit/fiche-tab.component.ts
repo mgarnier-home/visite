@@ -6,7 +6,7 @@ import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compu
 import { formatEur } from '../../core/format';
 import { SyncService } from '../../core/sync.service';
 import { DateTimeInputComponent } from '../../shared/date-time-input.component';
-import { NumericDirective, NumericMode, parseNumeric } from '../../shared/numeric.directive';
+import { NumericDirective, NumericMode, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
 
 type FicheKind = 'text' | 'eur' | 'number' | 'integer' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
 interface FicheField {
@@ -86,7 +86,7 @@ export class FicheTabComponent {
         ? '—'
         : d.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
     }
-    return String(v);
+    return typeof v === 'number' ? formatNumeric(v) : String(v);
   }
 
   protected link(field: FicheField): string | null {
@@ -102,7 +102,7 @@ export class FicheTabComponent {
   /** Valeur initiale d'un champ de saisie. */
   protected inputValue(field: FicheField): string {
     const v = this.fiche()?.[field.name] ?? null;
-    return v === null ? '' : String(v);
+    return typeof v === 'number' ? formatNumeric(v) : String(v ?? '');
   }
 
   protected inputType(kind: FicheKind): string {

@@ -13,7 +13,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { PointType, SectionKind, Template, TemplateSection } from '../../core/api.types';
-import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
+import { NumericDirective, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
 import { ConfirmDialog } from '../room/confirm.dialog';
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -53,6 +53,7 @@ export class TemplatePage implements OnInit {
   private readonly loaded = signal<Template | null>(null);
   protected readonly draft = signal<Template | null>(null);
   /** Saisie brute du poids par point : le poids stocké n'est mis à jour que pour un nombre > 0. */
+  protected readonly formatNumeric = formatNumeric;
   protected readonly weightDrafts = signal<Record<string, string>>({});
 
   protected readonly dirty = computed(() => {

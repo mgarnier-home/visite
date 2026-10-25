@@ -196,6 +196,13 @@ describe('TemplatePage', () => {
     expect(body.sections[2].points[0].weight).toBe(2.5);
   });
 
+  it('poids décimal : affiché avec une virgule', async () => {
+    const t = makeTemplate();
+    t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 2.5, position: 0 }] };
+    await setup(t);
+    expect(q<HTMLInputElement>('point-weight').value).toBe('2,5');
+  });
+
   it('quitter le type Bilan remet les poids à 1 : plus de blocage invisible', async () => {
     const t = makeTemplate();
     t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 1, position: 0 }] };

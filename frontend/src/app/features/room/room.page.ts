@@ -13,7 +13,7 @@ import { getDeviceId } from '../../core/device-id';
 import { LocalStore } from '../../core/local-store';
 import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
-import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
+import { NumericDirective, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
 import { PhotoButtonComponent, photoErrorMessage } from '../../shared/photo-button.component';
 import { AddPointDialog } from './add-point.dialog';
 import { AddQuestionDialog } from './add-question.dialog';
@@ -47,6 +47,7 @@ export class RoomPage {
     { initialValue: '' },
   );
   protected readonly code = computed(() => this.parentCode() || this.state()?.visit.code || '');
+  protected readonly formatNumeric = formatNumeric;
   protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
 
   private readonly visibleRooms = computed(() =>
@@ -245,7 +246,7 @@ export class RoomPage {
     return this.flushKey(key).then(() => {
       // saisie non numérique (« , » seul) : rien n'est enregistré, on rétablit l'affichage
       if (key.startsWith('area:') && input.value.trim() !== '' && parseNumeric(input.value) === null) {
-        input.value = String(this.area() ?? '');
+        input.value = formatNumeric(this.area());
       }
     });
   }

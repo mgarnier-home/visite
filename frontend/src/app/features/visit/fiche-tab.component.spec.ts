@@ -128,6 +128,13 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
+  it('surface décimale : affichée avec une virgule, en saisie comme en lecture', () => {
+    const { el } = setup(makeState({}, { living_area_m2: 85.5 }));
+    expect(field<HTMLInputElement>(el, 'living_area_m2').value).toBe('85,5');
+    const { el: el2 } = setup(makeState({ creator: false }, { living_area_m2: 85.5 }));
+    expect(text(el2, '[data-field=living_area_m2]')).toContain('85,5');
+  });
+
   it('nombre collé dans un champ vide : envoyé à la sortie du champ', () => {
     const { el } = setup(makeState({}, { living_area_m2: null }));
     const input = field<HTMLInputElement>(el, 'living_area_m2');
