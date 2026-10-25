@@ -177,4 +177,49 @@ describe('TemplatePage', () => {
     expect(q<HTMLInputElement>('section-name').value).toBe('Cuisine');
     expect(q<HTMLButtonElement>('save').disabled).toBe(true);
   });
+
+  it('vider puis retaper le poids : pas de coercition à 0, le poids saisi part dans le PUT', async () => {
+    const t = makeTemplate();
+    t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 1, position: 0 }] };
+    await setup(t);
+    const weight = q<HTMLInputElement>('point-weight');
+    await type(weight, '');
+    expect(weight.value).toBe('');
+    expect(q('weight-error')).toBeTruthy();
+    expect(q<HTMLButtonElement>('save').disabled).toBe(true);
+    await type(weight, '2.5');
+    expect(el().querySelector('[data-test=weight-error]')).toBeNull();
+    api.putTemplate.mockResolvedValue(makeTemplate(4));
+    await click(q('save'));
+    const body = api.putTemplate.mock.calls[0][0] as Template;
+    expect(body.sections[2].points[0].weight).toBe(2.5);
+  });
+
+  it('quitter le type Bilan remet les poids à 1 : plus de blocage invisible', async () => {
+    const t = makeTemplate();
+    t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 1, position: 0 }] };
+    await setup(t);
+    await type(q<HTMLInputElement>('point-weight'), '0');
+    expect(q<HTMLButtonElement>('save').disabled).toBe(true);
+    const selects = await loader.getAllHarnesses(MatSelectHarness.with({ selector: '[data-test=section-kind]' }));
+    await selects[2].clickOptions({ text: 'Thème' });
+    await settle();
+    expect(q<HTMLButtonElement>('save').disabled).toBe(false);
+    api.putTemplate.mockResolvedValue(makeTemplate(4));
+    await click(q('save'));
+    expect((api.putTemplate.mock.calls[0][0] as Template).sections[2].points[0].weight).toBe(1);
+  });
+
+  it('les champs sont désactivés pendant l\'enregistrement', async () => {
+    await setup();
+    await type(q<HTMLInputElement>('section-name'), 'Autre');
+    let release!: (t: Template) => void;
+    api.putTemplate.mockReturnValue(new Promise<Template>((r) => (release = r)));
+    q('save').click();
+    fixture.detectChanges();
+    expect(q<HTMLInputElement>('section-name').disabled).toBe(true);
+    release(makeTemplate(4));
+    await settle();
+    expect(q<HTMLInputElement>('section-name').disabled).toBe(false);
+  });
 });

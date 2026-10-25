@@ -11,41 +11,41 @@
   } @else if (loadError()) {
     <p class="notice" data-test="load-error">Impossible de charger le modèle</p>
   } @else if (draft(); as t) {
-    <div class="sections" cdkDropList (cdkDropListDropped)="dropSection($event)">
+    <div class="sections" cdkDropList [cdkDropListDisabled]="saving()" (cdkDropListDropped)="dropSection($event)">
       @for (s of t.sections; track s.id; let si = $index; let sFirst = $first; let sLast = $last) {
         <section class="section" cdkDrag data-test="section">
           <div class="row">
             <button mat-icon-button type="button" cdkDragHandle aria-label="Déplacer la section"><mat-icon svgIcon="drag_indicator" /></button>
             <mat-form-field appearance="outline" class="grow">
               <mat-label>Nom de la section</mat-label>
-              <input matInput data-test="section-name" autocomplete="off" [value]="s.name" (input)="setSectionName(si, $any($event.target).value)" />
+              <input matInput [disabled]="saving()" data-test="section-name" autocomplete="off" [value]="s.name" (input)="setSectionName(si, $any($event.target).value)" />
             </mat-form-field>
             <mat-form-field appearance="outline" class="kind">
               <mat-label>Type</mat-label>
-              <mat-select data-test="section-kind" [value]="s.kind" (selectionChange)="setSectionKind(si, $event.value)">
+              <mat-select [disabled]="saving()" data-test="section-kind" [value]="s.kind" (selectionChange)="setSectionKind(si, $event.value)">
                 @for (k of kinds; track k.value) {
                   <mat-option [value]="k.value">{{ k.label }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
-            <button mat-button type="button" data-test="section-up" [disabled]="sFirst" (click)="moveSection(si, si - 1)">Monter</button>
-            <button mat-button type="button" data-test="section-down" [disabled]="sLast" (click)="moveSection(si, si + 1)">Descendre</button>
-            <button mat-icon-button type="button" data-test="section-remove" aria-label="Supprimer la section" (click)="removeSection(si)"><mat-icon svgIcon="delete" /></button>
+            <button mat-button type="button" data-test="section-up" [disabled]="sFirst || saving()" (click)="moveSection(si, si - 1)">Monter</button>
+            <button mat-button type="button" data-test="section-down" [disabled]="sLast || saving()" (click)="moveSection(si, si + 1)">Descendre</button>
+            <button mat-icon-button type="button" data-test="section-remove" [disabled]="saving()" aria-label="Supprimer la section" (click)="removeSection(si)"><mat-icon svgIcon="delete" /></button>
           </div>
 
           <h2>Points</h2>
-          <div cdkDropList (cdkDropListDropped)="dropPoint(si, $event)">
+          <div cdkDropList [cdkDropListDisabled]="saving()" (cdkDropListDropped)="dropPoint(si, $event)">
             @for (p of s.points; track p.id; let pi = $index; let pFirst = $first; let pLast = $last) {
               <div class="item" cdkDrag data-test="point">
                 <div class="row">
                   <button mat-icon-button type="button" cdkDragHandle aria-label="Déplacer le point"><mat-icon svgIcon="drag_indicator" /></button>
                   <mat-form-field appearance="outline" class="grow">
                     <mat-label>Libellé</mat-label>
-                    <input matInput data-test="point-label" autocomplete="off" [value]="p.label" (input)="setPointLabel(si, pi, $any($event.target).value)" />
+                    <input matInput [disabled]="saving()" data-test="point-label" autocomplete="off" [value]="p.label" (input)="setPointLabel(si, pi, $any($event.target).value)" />
                   </mat-form-field>
                   <mat-form-field appearance="outline" class="kind">
                     <mat-label>Type</mat-label>
-                    <mat-select data-test="point-type" [value]="p.type" (selectionChange)="setPointType(si, pi, $event.value)">
+                    <mat-select [disabled]="saving()" data-test="point-type" [value]="p.type" (selectionChange)="setPointType(si, pi, $event.value)">
                       @for (ty of types; track ty.value) {
                         <mat-option [value]="ty.value">{{ ty.label }}</mat-option>
                       }
@@ -54,12 +54,15 @@
                   @if (s.kind === 'summary') {
                     <mat-form-field appearance="outline" class="weight">
                       <mat-label>Poids</mat-label>
-                      <input matInput type="number" min="0" step="any" data-test="point-weight" [value]="p.weight" (input)="setPointWeight(si, pi, $any($event.target).value)" />
+                      <input matInput [disabled]="saving()" type="number" min="0" step="any" data-test="point-weight" [value]="weightDrafts()[p.id] ?? p.weight" (input)="setPointWeight(si, pi, $any($event.target).value)" />
                     </mat-form-field>
+                    @if (weightError(p.id)) {
+                      <span class="field-error" role="alert" data-test="weight-error">Le poids doit être supérieur à 0</span>
+                    }
                   }
-                  <button mat-button type="button" data-test="point-up" [disabled]="pFirst" (click)="movePoint(si, pi, pi - 1)">Monter</button>
-                  <button mat-button type="button" data-test="point-down" [disabled]="pLast" (click)="movePoint(si, pi, pi + 1)">Descendre</button>
-                  <button mat-icon-button type="button" data-test="point-remove" aria-label="Supprimer le point" (click)="removePoint(si, pi)"><mat-icon svgIcon="delete" /></button>
+                  <button mat-button type="button" data-test="point-up" [disabled]="pFirst || saving()" (click)="movePoint(si, pi, pi - 1)">Monter</button>
+                  <button mat-button type="button" data-test="point-down" [disabled]="pLast || saving()" (click)="movePoint(si, pi, pi + 1)">Descendre</button>
+                  <button mat-icon-button type="button" data-test="point-remove" [disabled]="saving()" aria-label="Supprimer le point" (click)="removePoint(si, pi)"><mat-icon svgIcon="delete" /></button>
                 </div>
                 @if (p.type === 'constat') {
                   <mat-form-field appearance="outline" class="options">
@@ -71,39 +74,39 @@
                           <button matChipRemove type="button" [attr.aria-label]="'Retirer ' + o"><mat-icon svgIcon="close" /></button>
                         </mat-chip-row>
                       }
-                      <input data-test="option-input" placeholder="Nouvelle option" [matChipInputFor]="grid" [matChipInputAddOnBlur]="true" (matChipInputTokenEnd)="addOption(si, pi, $event)" />
+                      <input data-test="option-input" [disabled]="saving()" placeholder="Nouvelle option" [matChipInputFor]="grid" [matChipInputAddOnBlur]="true" (matChipInputTokenEnd)="addOption(si, pi, $event)" />
                     </mat-chip-grid>
                   </mat-form-field>
                 }
               </div>
             }
           </div>
-          <button mat-button type="button" data-test="point-add" (click)="addPoint(si)"><mat-icon svgIcon="add" /> Point</button>
+          <button mat-button type="button" data-test="point-add" [disabled]="saving()" (click)="addPoint(si)"><mat-icon svgIcon="add" /> Point</button>
 
           <h2>Questions</h2>
-          <div cdkDropList (cdkDropListDropped)="dropQuestion(si, $event)">
+          <div cdkDropList [cdkDropListDisabled]="saving()" (cdkDropListDropped)="dropQuestion(si, $event)">
             @for (q of s.questions; track q.id; let qi = $index; let qFirst = $first; let qLast = $last) {
               <div class="item row" cdkDrag data-test="question">
                 <button mat-icon-button type="button" cdkDragHandle aria-label="Déplacer la question"><mat-icon svgIcon="drag_indicator" /></button>
                 <mat-form-field appearance="outline" class="grow">
                   <mat-label>Question</mat-label>
-                  <input matInput data-test="question-text" autocomplete="off" [value]="q.text" (input)="setQuestionText(si, qi, $any($event.target).value)" />
+                  <input matInput [disabled]="saving()" data-test="question-text" autocomplete="off" [value]="q.text" (input)="setQuestionText(si, qi, $any($event.target).value)" />
                 </mat-form-field>
-                <button mat-button type="button" data-test="question-up" [disabled]="qFirst" (click)="moveQuestion(si, qi, qi - 1)">Monter</button>
-                <button mat-button type="button" data-test="question-down" [disabled]="qLast" (click)="moveQuestion(si, qi, qi + 1)">Descendre</button>
-                <button mat-icon-button type="button" data-test="question-remove" aria-label="Supprimer la question" (click)="removeQuestion(si, qi)"><mat-icon svgIcon="delete" /></button>
+                <button mat-button type="button" data-test="question-up" [disabled]="qFirst || saving()" (click)="moveQuestion(si, qi, qi - 1)">Monter</button>
+                <button mat-button type="button" data-test="question-down" [disabled]="qLast || saving()" (click)="moveQuestion(si, qi, qi + 1)">Descendre</button>
+                <button mat-icon-button type="button" data-test="question-remove" [disabled]="saving()" aria-label="Supprimer la question" (click)="removeQuestion(si, qi)"><mat-icon svgIcon="delete" /></button>
               </div>
             }
           </div>
-          <button mat-button type="button" data-test="question-add" (click)="addQuestion(si)"><mat-icon svgIcon="add" /> Question</button>
+          <button mat-button type="button" data-test="question-add" [disabled]="saving()" (click)="addQuestion(si)"><mat-icon svgIcon="add" /> Question</button>
         </section>
       }
     </div>
-    <button mat-stroked-button type="button" data-test="section-add" (click)="addSection()"><mat-icon svgIcon="add" /> Section</button>
+    <button mat-stroked-button type="button" data-test="section-add" [disabled]="saving()" (click)="addSection()"><mat-icon svgIcon="add" /> Section</button>
 
     <mat-form-field appearance="outline" class="full">
       <mat-label>À emporter</mat-label>
-      <textarea matInput rows="5" data-test="packing-list" [value]="t.packing_list" (input)="setPackingList($any($event.target).value)"></textarea>
+      <textarea matInput [disabled]="saving()" rows="5" data-test="packing-list" [value]="t.packing_list" (input)="setPackingList($any($event.target).value)"></textarea>
     </mat-form-field>
 
     <div class="actions">

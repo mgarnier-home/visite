@@ -53,3 +53,5 @@
 
 .cdk-drag-preview { box-sizing: border-box; background: var(--mat-sys-surface); }
 .cdk-drag-placeholder { opacity: 0.3; }
+
+.field-error { color: var(--mat-sys-error); font-size: 0.8rem; flex-basis: 100%; }

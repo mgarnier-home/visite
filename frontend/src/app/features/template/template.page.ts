@@ -15,6 +15,7 @@ import { PointType, SectionKind, Template, TemplateSection } from '../../core/ap
 import { ConfirmDialog } from '../room/confirm.dialog';
 
 const clone = <T>(value: T): T => structuredClone(value);
+const isPositiveNumber = (raw: string): boolean => raw.trim() !== '' && Number.isFinite(Number(raw)) && Number(raw) > 0;
 
 /** Éditeur du modèle de visite (écran 5) : sections, points, questions et liste « À emporter ». */
 @Component({
@@ -49,6 +50,8 @@ export class TemplatePage implements OnInit {
   protected readonly saving = signal(false);
   private readonly loaded = signal<Template | null>(null);
   protected readonly draft = signal<Template | null>(null);
+  /** Saisie brute du poids par point : le poids stocké n'est mis à jour que pour un nombre > 0. */
+  protected readonly weightDrafts = signal<Record<string, string>>({});
 
   protected readonly dirty = computed(() => {
     const draft = this.draft();
@@ -59,6 +62,7 @@ export class TemplatePage implements OnInit {
   protected readonly valid = computed(() => {
     const draft = this.draft();
     if (!draft) return false;
+    if (Object.values(this.weightDrafts()).some((raw) => !isPositiveNumber(raw))) return false;
     return draft.sections.every(
       (s) =>
         s.name.trim() !== '' &&
@@ -91,6 +95,7 @@ export class TemplatePage implements OnInit {
       this.offline.set(false);
       this.loaded.set(clone(template));
       this.draft.set(clone(template));
+      this.weightDrafts.set({});
     } catch (e) {
       if (e instanceof ApiError && e.status === 0) this.offline.set(true);
       else this.loadError.set(true);
@@ -134,7 +139,16 @@ export class TemplatePage implements OnInit {
   }
 
   protected setSectionKind(si: number, kind: SectionKind): void {
-    this.edit((t) => (t.sections[si].kind = kind));
+    this.edit((t) => {
+      const section = t.sections[si];
+      section.kind = kind;
+      // le poids n'est éditable que dans un bilan, mais le serveur exige un poids > 0 partout
+      if (kind !== 'summary') section.points.forEach((p) => (p.weight = 1));
+    });
+    if (kind !== 'summary') {
+      const ids = new Set(this.draft()!.sections[si].points.map((p) => p.id));
+      this.weightDrafts.update((d) => Object.fromEntries(Object.entries(d).filter(([id]) => !ids.has(id))));
+    }
   }
 
   protected async removeSection(si: number): Promise<void> {
@@ -183,8 +197,14 @@ export class TemplatePage implements OnInit {
   }
 
   protected setPointWeight(si: number, pi: number, raw: string): void {
-    const weight = raw.trim() === '' ? 0 : Number(raw);
-    this.edit((t) => (t.sections[si].points[pi].weight = Number.isFinite(weight) ? weight : 0));
+    const id = this.draft()!.sections[si].points[pi].id;
+    this.weightDrafts.update((d) => ({ ...d, [id]: raw }));
+    if (isPositiveNumber(raw)) this.edit((t) => (t.sections[si].points[pi].weight = Number(raw)));
+  }
+
+  protected weightError(id: string): boolean {
+    const raw = this.weightDrafts()[id];
+    return raw !== undefined && !isPositiveNumber(raw);
   }
 
   protected addOption(si: number, pi: number, event: MatChipInputEvent): void {
@@ -240,6 +260,7 @@ export class TemplatePage implements OnInit {
   // --- enregistrement ---
   protected cancel(): void {
     this.draft.set(clone(this.loaded()!));
+    this.weightDrafts.set({});
   }
 
   /** Copie à envoyer : positions recalculées de 0 à n, textes nettoyés. */
@@ -267,6 +288,7 @@ export class TemplatePage implements OnInit {
       const saved = await this.api.putTemplate(this.payload());
       this.loaded.set(clone(saved));
       this.draft.set(clone(saved));
+      this.weightDrafts.set({});
       this.notify('Modèle enregistré');
     } catch (e) {
       const status = e instanceof ApiError ? e.status : -1;
