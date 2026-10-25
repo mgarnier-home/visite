@@ -1,0 +1,39 @@
+<article class="card" [class.blocking]="blocking()">
+  <header>
+    <h3 class="label" data-test="label">{{ point().label }}</h3>
+    @if (showWeight()) {
+      <span class="weight" data-test="weight">×{{ point().weight }}</span>
+    }
+    @if (blocking()) {
+      <span class="flag" data-test="blocking"><mat-icon svgIcon="flag" />Bloquant</span>
+    }
+    <app-point-menu
+      [blocking]="blocking()"
+      [works]="works()"
+      [disabled]="disabled()"
+      (blockingChange)="setBlocking.emit($event)"
+      (worksChange)="setWorks.emit($event)"
+    />
+  </header>
+
+  <div class="choices" role="group" [attr.aria-label]="point().label">
+    @for (c of choices(); track c.label) {
+      <button
+        type="button"
+        class="choice"
+        data-test="choice"
+        [class.selected]="isSelected(c)"
+        [attr.aria-pressed]="isSelected(c)"
+        [disabled]="disabled()"
+        (click)="pick(c)"
+      >{{ c.label }}</button>
+    }
+  </div>
+
+  @if (valueAuthor() !== undefined) {
+    <span class="author" data-test="author">P{{ valueAuthor() }}</span>
+  }
+  @if (works() !== null) {
+    <span class="works-label" data-test="works">Travaux : {{ works() }} €</span>
+  }
+</article>
