@@ -242,7 +242,12 @@ export class RoomPage {
   protected onBlur(key: string, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement;
     if (!(key in this.drafts())) this.drafts.update((d) => ({ ...d, [key]: input.value }));
-    return this.flushKey(key);
+    return this.flushKey(key).then(() => {
+      // saisie non numérique (« , » seul) : rien n'est enregistré, on rétablit l'affichage
+      if (key.startsWith('area:') && input.value.trim() !== '' && parseNumeric(input.value) === null) {
+        input.value = String(this.area() ?? '');
+      }
+    });
   }
 
   private dropDraft(key: string): void {

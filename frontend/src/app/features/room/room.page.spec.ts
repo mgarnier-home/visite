@@ -149,6 +149,15 @@ describe('RoomPage', () => {
     expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'r1', field: 'area_m2', value: 22.5 });
   });
 
+  it('surface : une virgule seule n\'envoie rien et rétablit la valeur affichée', async () => {
+    const { el } = await setup();
+    const area = q<HTMLInputElement>(el, '[data-test=area]');
+    area.value = ',';
+    area.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(area.value).toBe('20'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
+
   it('« Posée » dispatche set_shared asked', async () => {
     const { el } = await setup();
     q<HTMLInputElement>(el, '[data-test=asked] input').click();

@@ -17,6 +17,11 @@ describe('sanitizeNumeric', () => {
     expect(sanitizeNumeric('3.14159', 'decimal')).toBe('3.14');
     expect(sanitizeNumeric('', 'decimal')).toBe('');
   });
+
+  it('limite la partie entière à 9 chiffres', () => {
+    expect(sanitizeNumeric('12345678901', 'integer')).toBe('123456789');
+    expect(sanitizeNumeric('1234567890,55', 'decimal')).toBe('123456789,55');
+  });
 });
 
 describe('parseNumeric', () => {
@@ -76,6 +81,37 @@ describe('NumericDirective', () => {
     int.value = 'e';
     int.dispatchEvent(new Event('input'));
     expect(int.value).toBe('');
+  });
+
+  it('bloque un second séparateur, sauf s\'il remplace le premier', () => {
+    const { dec } = setup();
+    dec.value = '12,5';
+    dec.setSelectionRange(4, 4);
+    expect(beforeInput(dec, '.').defaultPrevented).toBe(true);
+    dec.setSelectionRange(2, 3);
+    expect(beforeInput(dec, '.').defaultPrevented).toBe(false);
+  });
+
+  it('composition : la valeur n\'est filtrée qu\'à compositionend', () => {
+    const { int } = setup();
+    int.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const event = new InputEvent('beforeinput', { data: 'ab', inputType: 'insertCompositionText', isComposing: true, cancelable: true, bubbles: true });
+    int.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    int.value = 'a1b';
+    int.dispatchEvent(new InputEvent('input', { isComposing: true, bubbles: true }));
+    expect(int.value).toBe('a1b');
+    int.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    expect(int.value).toBe('1');
+  });
+
+  it('garde le curseur à l\'endroit de l\'insertion quand un caractère est filtré', () => {
+    const { int } = setup();
+    int.value = '12x34';
+    int.setSelectionRange(3, 3);
+    int.dispatchEvent(new Event('input'));
+    expect(int.value).toBe('1234');
+    expect(int.selectionStart).toBe(2);
   });
 
   it('colle « 12,5 m² » dans un champ décimal', () => {
