@@ -28,7 +28,8 @@ var noCacheFiles = map[string]bool{
 	"ngsw-worker.js": true,
 }
 
-// handler sert un fichier existant tel quel, et index.html pour toute autre route.
+// handler sert un fichier existant tel quel, 404 pour un fichier absent (dernier segment
+// avec extension), et index.html pour toute autre route.
 func handler(fsys fs.FS) http.Handler {
 	files := http.FileServer(http.FS(fsys))
 
@@ -41,6 +42,13 @@ func handler(fsys fs.FS) http.Handler {
 					w.Header().Set("Cache-Control", "no-cache")
 				}
 				files.ServeHTTP(w, r)
+				return
+			}
+			// Un fichier absent (ancien chunk, ressource inconnue) n'est pas une route de
+			// l'application : 404 plutôt qu'index.html servi sous un mauvais type.
+			if path.Ext(name) != "" {
+				w.Header().Set("Cache-Control", "no-cache")
+				http.NotFound(w, r)
 				return
 			}
 		}

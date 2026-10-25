@@ -62,6 +62,17 @@ func TestSPAFallback(t *testing.T) {
 			}
 		}
 	})
+	t.Run("fichier absent avec extension : 404, pas index.html", func(t *testing.T) {
+		for _, p := range []string{"/chunk-ABC123.js", "/assets/absent.png", "/v/abc/styles.css"} {
+			rec := get(t, h, p)
+			if rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "index") {
+				t.Fatalf("%s : code %d, corps %q", p, rec.Code, rec.Body)
+			}
+			if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+				t.Fatalf("%s : Cache-Control = %q", p, cc)
+			}
+		}
+	})
 	t.Run("un dossier ne liste pas son contenu", func(t *testing.T) {
 		rec := get(t, h, "/assets/")
 		if rec.Body.String() != "<html>index</html>" {
