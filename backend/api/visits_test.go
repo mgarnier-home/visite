@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/mgarnier-home/visite/model"
+	"github.com/mgarnier-home/visite/photos"
 	"github.com/mgarnier-home/visite/seed"
 	"github.com/mgarnier-home/visite/store"
 )
@@ -25,6 +26,14 @@ const (
 
 func newTestRouter(t *testing.T) *mux.Router {
 	t.Helper()
+	router, _ := newTestRouterWithPhotos(t)
+	return router
+}
+
+// newTestRouterWithPhotos renvoie aussi la racine du stockage des photos.
+func newTestRouterWithPhotos(t *testing.T) (*mux.Router, string) {
+	t.Helper()
+	photosRoot := t.TempDir()
 	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +46,7 @@ func newTestRouter(t *testing.T) *mux.Router {
 	if err := s.SeedTemplateIfEmpty(context.Background(), tpl); err != nil {
 		t.Fatal(err)
 	}
-	return NewRouter(Deps{Store: s, Now: func() time.Time { return time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC) }})
+	return NewRouter(Deps{Store: s, Photos: photos.FS{Root: photosRoot}, Now: func() time.Time { return time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC) }}), photosRoot
 }
 
 func do(t *testing.T, router http.Handler, method, path, device, body string) *httptest.ResponseRecorder {

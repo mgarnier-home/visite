@@ -11,6 +11,7 @@ import (
 	"github.com/mgarnier-home/utils/logger"
 
 	"github.com/mgarnier-home/visite/api"
+	"github.com/mgarnier-home/visite/photos"
 	"github.com/mgarnier-home/visite/seed"
 	"github.com/mgarnier-home/visite/store"
 )
@@ -43,7 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st})
+	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st, Photos: photos.FS{Root: cfg.PhotosDir}})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Infof("écoute sur %s", addr)
