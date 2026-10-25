@@ -1,6 +1,6 @@
 import { MatDateFormats, MAT_DATE_LOCALE } from '@angular/material/core';
 import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
-import { fr } from 'date-fns/locale';
+import { fr } from 'date-fns/locale/fr';
 import { Provider } from '@angular/core';
 import { localIsoWithOffset } from '../core/sync.service';
 

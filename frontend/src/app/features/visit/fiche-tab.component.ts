@@ -171,6 +171,8 @@ export class FicheTabComponent {
   }
 
   private sameInstant(next: string | null, current: unknown): boolean {
-    return typeof next === 'string' && typeof current === 'string' && new Date(next).getTime() === new Date(current).getTime();
+    // à la minute : le champ n'a pas de secondes
+    const minute = (iso: string) => Math.floor(new Date(iso).getTime() / 60_000);
+    return typeof next === 'string' && typeof current === 'string' && minute(next) === minute(current);
   }
 }

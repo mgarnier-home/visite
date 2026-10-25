@@ -4,7 +4,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Fiche, VisitState } from '../../core/api.types';
 import { SyncService } from '../../core/sync.service';
-import { provideFrenchDates } from '../../shared/date-time';
 import { provideAppIcons } from '../../shared/icons';
 import { FicheTabComponent } from './fiche-tab.component';
 
@@ -54,7 +53,6 @@ describe('FicheTabComponent', () => {
         { provide: SyncService, useValue: sync },
         { provide: MatSnackBar, useValue: snack },
         provideAppIcons(),
-        provideFrenchDates(),
       ],
     });
   });
@@ -177,6 +175,13 @@ describe('FicheTabComponent', () => {
     await fixture.whenStable();
     const time = el.querySelector<HTMLInputElement>('[data-field=visit_at] [data-test=time]')!;
     time.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('visit_at stockée avec des secondes : sortie du champ heure sans envoi', async () => {
+    const { fixture, el } = setup(makeState({}, { visit_at: '2026-10-25T14:30:45+01:00' }));
+    await fixture.whenStable();
+    el.querySelector<HTMLInputElement>('[data-field=visit_at] [data-test=time]')!.dispatchEvent(new Event('blur'));
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 

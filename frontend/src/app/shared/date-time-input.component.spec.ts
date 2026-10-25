@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideAppIcons } from './icons';
 import { DateTimeInputComponent } from './date-time-input.component';
-import { provideFrenchDates, splitDateTime } from './date-time';
+import { splitDateTime } from './date-time';
 
 @Component({
   imports: [FormsModule, DateTimeInputComponent],
@@ -17,7 +17,7 @@ class Host {
 
 describe('DateTimeInputComponent', () => {
   beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [Host], providers: [provideFrenchDates(), provideAppIcons()] });
+    TestBed.configureTestingModule({ imports: [Host], providers: [provideAppIcons()] });
   });
 
   async function setup(initial: string | null = null) {
@@ -101,5 +101,12 @@ describe('DateTimeInputComponent', () => {
     const { time } = splitDateTime('2026-10-25T14:30:00+01:00');
     expect(dateInput.value).toMatch(/^2[56]\/10\/2026$/);
     expect(timeInput.value).toBe(time);
+  });
+
+  it.each(['25/10/26', '25', '25/10'])('date incomplète « %s » : « Date invalide » et rien d\'émis', async (text) => {
+    const { el, typeDate, emitted } = await setup();
+    await typeDate(text);
+    expect(el.textContent).toContain('Date invalide');
+    expect(emitted).toEqual([]);
   });
 });

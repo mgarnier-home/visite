@@ -4,7 +4,6 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { VisitState } from '../../core/api.types';
 import { LocalStore } from '../../core/local-store';
-import { provideFrenchDates } from '../../shared/date-time';
 import { provideAppIcons } from '../../shared/icons';
 import { CreatePage } from './create.page';
 
@@ -23,7 +22,6 @@ describe('CreatePage', () => {
         { provide: ApiClient, useValue: api },
         { provide: LocalStore, useValue: store },
         provideRouter([]),
-        provideFrenchDates(),
         provideAppIcons(),
       ],
     });
@@ -222,6 +220,24 @@ describe('CreatePage', () => {
     submit().click();
     await settle(fixture);
     expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
+  });
+
+  it('heure invalide après une date valide : création désactivée', async () => {
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    const fill = (sel: string, v: string) => {
+      const input = el.querySelector(sel) as HTMLInputElement;
+      input.value = v;
+      for (const e of ['input', 'change', 'blur']) input.dispatchEvent(new Event(e));
+    };
+    fill('[data-test=visit-at] [data-test=date]', '25/10/2026');
+    fill('[data-test=visit-at] [data-test=time]', '1430');
+    await settle(fixture, 300);
+    expect(submit().disabled).toBe(false);
+    fill('[data-test=visit-at] [data-test=time]', '2575');
+    await settle(fixture);
+    expect(submit().disabled).toBe(true);
   });
 
   it('champs numériques en texte filtré', () => {
