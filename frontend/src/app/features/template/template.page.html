@@ -92,6 +92,9 @@
                   <mat-label>Question</mat-label>
                   <input matInput [disabled]="saving()" data-test="question-text" autocomplete="off" [value]="q.text" (input)="setQuestionText(si, qi, $any($event.target).value)" />
                 </mat-form-field>
+                @if (s.kind === 'room') {
+                  <mat-checkbox data-test="question-important" [disabled]="saving()" [checked]="q.important" (change)="setQuestionImportant(si, qi, $event.checked)">Importante</mat-checkbox>
+                }
                 <button mat-button type="button" data-test="question-up" [disabled]="qFirst || saving()" (click)="moveQuestion(si, qi, qi - 1)">Monter</button>
                 <button mat-button type="button" data-test="question-down" [disabled]="qLast || saving()" (click)="moveQuestion(si, qi, qi + 1)">Descendre</button>
                 <button mat-icon-button type="button" data-test="question-remove" [disabled]="saving()" aria-label="Supprimer la question" (click)="removeQuestion(si, qi)"><mat-icon svgIcon="delete" /></button>

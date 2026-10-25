@@ -2,6 +2,7 @@ import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, moveItemInArray } fro
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -22,7 +23,7 @@ const isPositiveNumber = (raw: string): boolean => (parseNumeric(raw) ?? 0) > 0;
 @Component({
   selector: 'app-template-page',
   imports: [
-    CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatChipsModule,
+    CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatCheckboxModule, MatChipsModule,
     MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, NumericDirective,
   ],
   templateUrl: './template.page.html',
@@ -147,6 +148,8 @@ export class TemplatePage implements OnInit {
       section.kind = kind;
       // le poids n'est éditable que dans un bilan, mais le serveur exige un poids > 0 partout
       if (kind !== 'summary') section.points.forEach((p) => (p.weight = 1));
+      // « Importante » n'existe que dans une pièce
+      if (kind !== 'room') section.questions.forEach((q) => (q.important = false));
     });
     if (kind !== 'summary') {
       const ids = new Set(this.draft()!.sections[si].points.map((p) => p.id));
@@ -246,6 +249,10 @@ export class TemplatePage implements OnInit {
 
   protected setQuestionText(si: number, qi: number, text: string): void {
     this.edit((t) => (t.sections[si].questions[qi].text = text));
+  }
+
+  protected setQuestionImportant(si: number, qi: number, important: boolean): void {
+    this.edit((t) => (t.sections[si].questions[qi].important = important));
   }
 
   protected removeQuestion(si: number, qi: number): void {
