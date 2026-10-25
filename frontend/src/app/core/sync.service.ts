@@ -304,13 +304,14 @@ export class SyncService {
       if (rejected.length > 0) await this.store.markReloadNeeded(code);
       await this.store.ackOps(done.map((r) => r.op_id));
       if (!alive()) return;
-      await this.refreshCounts(code, generation);
+      // émissions sans await depuis le dernier test : elles ne peuvent viser qu'à la session courante
       for (const r of rejected) {
         this.rejectedSubject.next(r);
         this.noticesSubject.next(
           `Une modification a été refusée (${r.reason ? REASON_LABELS[r.reason] : 'raison inconnue'})`,
         );
       }
+      await this.refreshCounts(code, generation);
     }
   }
 
@@ -353,8 +354,9 @@ export class SyncService {
         await this.refreshCounts(code, generation);
         continue;
       }
-      if (generation !== this.generation) return;
+      // 2xx : la photo est sur le serveur ; on l'acquitte même si la session a été fermée
       await this.store.ackPhoto(p.id);
+      if (generation !== this.generation) return;
       await this.refreshCounts(code, generation);
     }
   }

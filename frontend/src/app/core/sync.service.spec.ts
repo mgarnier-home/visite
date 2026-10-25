@@ -515,6 +515,50 @@ describe('SyncService', () => {
       expect(api.changes.mock.calls.map((c) => c[0])).toEqual([OTHER]);
     });
 
+    it('uploadPhoto réussi après fermeture : la photo est quand même acquittée', async () => {
+      await openIdle();
+      const d = deferred<void>();
+      impl('photo', () => d.promise);
+      await svc.addPhoto('r1', new Blob(['jpeg']));
+      await vi.waitFor(() => expect(api.uploadPhoto).toHaveBeenCalledTimes(1));
+      await svc.open(OTHER);
+      d.resolve(); // 201 : la photo est sur le serveur
+      await d.promise;
+      await expectOtherUntouched();
+      expect(await store.pendingPhotos(CODE)).toEqual([]);
+      expect(api.changes.mock.calls.map((c) => c[0])).toEqual([OTHER]);
+    });
+
+    it('changement de visite pendant le recomptage qui suit un rejet : émissions pour la seule session courante', async () => {
+      await openIdle();
+      const sessions: Array<string | undefined> = [];
+      svc.rejected$.subscribe(() => sessions.push(svc.state()?.visit.code));
+      svc.notices$.subscribe(() => sessions.push(svc.state()?.visit.code));
+      const gate = deferred<void>();
+      let counting = false;
+      const original = store.pendingPhotos.bind(store);
+      impl('ops', async (_c: string, ops: Op[]) => {
+        // le prochain pendingPhotos est celui du recomptage qui suit l'acquittement
+        vi.spyOn(store, 'pendingPhotos').mockImplementationOnce(async (code: string) => {
+          counting = true;
+          await gate.promise;
+          return original(code);
+        });
+        return { seq: 6, results: ops.map((o) => ({ op_id: o.op_id, result: 'rejected', reason: 'closed' })) };
+      });
+      await svc.dispatch('set_comment', { room_id: 'r1', text: 'x' });
+      await vi.waitFor(() => expect(counting).toBe(true));
+      await svc.open(OTHER);
+      gate.resolve();
+      for (let i = 0; i < 20; i++) await store.pendingOps('aucune');
+      await svc.whenIdle();
+      expect(sessions).toEqual([CODE, CODE]); // rejet + message, émis avant le changement
+      expect(svc.state()!.visit.code).toBe(OTHER);
+      expect((await store.getState(OTHER))?.seq).toBe(40);
+      expect(api.state).not.toHaveBeenCalled();
+      expect(await store.isReloadNeeded(CODE)).toBe(true); // rechargement dû à la réouverture
+    });
+
     it('changes en vol : ni le signal ni les états enregistrés ne sont modifiés', async () => {
       await openIdle();
       const d = deferred<VisitState>();
