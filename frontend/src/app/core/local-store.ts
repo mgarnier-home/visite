@@ -65,6 +65,18 @@ export class LocalStore {
     return db.photos.where('code').equals(code).toArray();
   }
 
+  /** Nombre d'opérations et de photos en attente, par visite (seulement celles qui en ont). */
+  async pendingCounts(): Promise<Map<string, number>> {
+    // clés d'index seulement : ni les opérations ni les photos ne sont chargées
+    const [ops, photos] = await Promise.all([
+      db.outbox.orderBy('code').keys(),
+      db.photos.orderBy('code').keys(),
+    ]);
+    const counts = new Map<string, number>();
+    for (const code of [...ops, ...photos] as string[]) counts.set(code, (counts.get(code) ?? 0) + 1);
+    return counts;
+  }
+
   async ackPhoto(id: string): Promise<void> {
     await db.photos.delete(id);
   }

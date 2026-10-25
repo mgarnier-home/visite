@@ -646,4 +646,45 @@ describe('SyncService', () => {
     expect(api.changes).not.toHaveBeenCalled();
     await expect(svc.dispatch('set_rating', { point_id: 'p1', value: 1 })).rejects.toThrow();
   });
+
+  it('écriture perdante (LWW) : l\'expéditeur reprend la valeur gagnante renvoyée par changes', async () => {
+    await openIdle();
+    // le serveur garde la valeur plus récente de P2 et lui donne un nouveau seq (6 > 5)
+    impl('changes', async (_code: string, since: number) => ({
+      ...emptyChanges(since === 5 ? 6 : since),
+      shared: since === 5 ? [{ target_id: 'p1', field: 'value', value: 'de P2', updated_at: 200, author: 2 }] : [],
+    }));
+    await svc.dispatch('set_shared', { target_id: 'p1', field: 'value', value: 'de moi' });
+    expect(svc.state()!.shared[0].value).toBe('de moi');
+    await svc.whenIdle();
+    expect(api.sendOps).toHaveBeenCalledTimes(1);
+    expect(api.changes).toHaveBeenCalledWith(CODE, 5);
+    const s = svc.state()!;
+    expect(s.seq).toBe(6);
+    expect(s.shared).toEqual([{ target_id: 'p1', field: 'value', value: 'de P2', updated_at: 200, author: 2 }]);
+    expect((await store.getState(CODE))?.shared[0].value).toBe('de P2');
+  });
+
+  it('close() signale la visite fermée, isOpen suit la visite ouverte, settled attend la dernière boucle', async () => {
+    const closed: string[] = [];
+    svc.closed$.subscribe((c) => closed.push(c));
+    await openIdle();
+    expect(svc.isOpen(CODE)).toBe(true);
+    expect(svc.isOpen(OTHER)).toBe(false);
+    const d = deferred<OpsResponse>();
+    impl('ops', () => d.promise);
+    await svc.dispatch('set_rating', { point_id: 'p1', value: 3 });
+    await vi.waitFor(() => expect(api.sendOps).toHaveBeenCalledTimes(1));
+    svc.close();
+    expect(closed).toEqual([CODE]);
+    expect(svc.isOpen(CODE)).toBe(false);
+    let settled = false;
+    void svc.settled().then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false); // l'envoi de la session fermée est encore en vol
+    d.resolve(applied([]));
+    await vi.waitFor(() => expect(settled).toBe(true));
+    svc.close();
+    expect(closed).toEqual([CODE]); // rien d'ouvert : pas de nouveau signal
+  });
 });

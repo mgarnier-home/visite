@@ -30,6 +30,16 @@ describe('LocalStore', () => {
     expect((await store.pendingOps('a')).map((o) => o.op_id)).toEqual(['z', 'c', 'k']);
   });
 
+  it('pendingCounts compte opérations et photos en attente par visite', async () => {
+    expect(await store.pendingCounts()).toEqual(new Map());
+    await store.enqueue('a', op('1'));
+    await store.enqueue('a', op('2'));
+    await store.enqueue('b', op('3'));
+    await store.addPhoto({ id: 'ph', code: 'c', room_id: null, taken_at: 'x', blob: new Blob(['x']) });
+    await store.addPhoto({ id: 'ph2', code: 'a', room_id: null, taken_at: 'x', blob: new Blob(['x']) });
+    expect(await store.pendingCounts()).toEqual(new Map([['a', 3], ['b', 1], ['c', 1]]));
+  });
+
   it('ackOps supprime par op_id', async () => {
     await store.enqueue('a', op('1'));
     await store.enqueue('a', op('2'));

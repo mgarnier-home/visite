@@ -67,6 +67,11 @@
     font: var(--mat-sys-body-small);
     color: var(--mat-sys-on-surface-variant);
   }
+
+  .pending {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-tertiary);
+  }
 }
 
 .template-link {

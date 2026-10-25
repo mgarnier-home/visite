@@ -3,9 +3,11 @@ import localeFr from '@angular/common/locales/fr';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { signal } from '@angular/core';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { VisitState } from '../../core/api.types';
+import { BackgroundSyncService } from '../../core/background-sync.service';
 import { LocalStore, PendingDataError } from '../../core/local-store';
 import { HomePage } from './home.page';
 
@@ -16,7 +18,8 @@ const stateOf = (code: string) =>
 
 describe('HomePage', () => {
   const api = { join: vi.fn(), state: vi.fn() };
-  const store = { saveState: vi.fn(), getState: vi.fn(), listVisits: vi.fn(), removeVisit: vi.fn() };
+  const store = { saveState: vi.fn(), getState: vi.fn(), listVisits: vi.fn(), removeVisit: vi.fn(), pendingCounts: vi.fn() };
+  const background = { revision: signal(0) };
   const navigate = vi.fn();
   const snack = { open: vi.fn() };
 
@@ -29,18 +32,29 @@ describe('HomePage', () => {
         { provide: LocalStore, useValue: store },
         provideRouter([]),
         { provide: MatSnackBar, useValue: snack },
+        { provide: BackgroundSyncService, useValue: background },
       ],
     });
     vi.spyOn(TestBed.inject(Router), 'navigate').mockImplementation(navigate);
     const fixture = TestBed.createComponent(HomePage);
     fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
     return fixture;
+  }
+
+  /** Laisse finir les lectures du stockage local (plusieurs promesses enchaînées). */
+  async function settle(fixture: { detectChanges(): void; whenStable(): Promise<unknown> }) {
+    for (let i = 0; i < 3; i++) {
+      await fixture.whenStable();
+      await new Promise((r) => setTimeout(r));
+      fixture.detectChanges();
+    }
   }
 
   beforeEach(() => {
     vi.resetAllMocks();
+    store.pendingCounts.mockResolvedValue(new Map());
+    background.revision.set(0);
   });
 
   async function join(fixture: Awaited<ReturnType<typeof setup>>, typed: string) {
@@ -118,5 +132,26 @@ describe('HomePage', () => {
       undefined,
       expect.anything(),
     );
+  });
+
+  it('signale les modifications en attente par visite, et se met à jour après un envoi', async () => {
+    store.pendingCounts.mockResolvedValue(new Map([['maison-x', 3]]));
+    const fixture = await setup([
+      { code: 'maison-x', state: stateOf('maison-x') },
+      { code: 'maison-y', state: stateOf('maison-y') },
+    ]);
+    const el = fixture.nativeElement as HTMLElement;
+    const pending = () => Array.from(el.querySelectorAll('.visits li')).map((li) => li.querySelector('[data-test=pending]')?.textContent?.trim() ?? null);
+    expect(pending()).toEqual(['3 modifications en attente', null]);
+
+    store.pendingCounts.mockResolvedValue(new Map([['maison-x', 1]]));
+    background.revision.set(1);
+    await settle(fixture);
+    expect(pending()).toEqual(['1 modification en attente', null]);
+
+    store.pendingCounts.mockResolvedValue(new Map());
+    background.revision.set(2);
+    await settle(fixture);
+    expect(pending()).toEqual([null, null]);
   });
 });

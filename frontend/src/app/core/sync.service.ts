@@ -4,6 +4,7 @@ import { ApiClient, ApiError } from './api.client';
 import { Op, OpResult, OpType, VisitState } from './api.types';
 import { LocalStore } from './local-store';
 import { applyOp, mergeChanges } from './reducer';
+import { isTransient, RETRY_DELAYS, SyncPusher } from './sync-push';
 
 export interface SyncStatus {
   online: boolean;
@@ -27,13 +28,8 @@ export const SYNC_TIMERS = new InjectionToken<SyncTimers>('SYNC_TIMERS', {
   }),
 });
 
-/** Délais de nouvelle tentative après un échec (ms), plafonnés au dernier. */
-const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 /** Récupération périodique des changements (ms). */
 const POLL_DELAY = 5000;
-const MAX_BATCH_OPS = 500;
-/** 1 Mo par lot, moins l'enveloppe `{"ops":[]}`. */
-const MAX_BATCH_BYTES = 1_000_000 - 16;
 
 const REASON_LABELS: Record<NonNullable<OpResult['reason']>, string> = {
   closed: 'visite clôturée',
@@ -55,25 +51,6 @@ export function localIsoWithOffset(d: Date, offsetMinutes = -d.getTimezoneOffset
     `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}` +
     `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
   );
-}
-
-/** Réseau, 5xx, 408, 429 : l'erreur est passagère, on réessaiera. */
-function isTransient(status: number): boolean {
-  return status === 0 || status >= 500 || status === 408 || status === 429;
-}
-
-/** Premier lot à envoyer : 500 opérations et 1 Mo au plus, au moins une opération. */
-function takeBatch(ops: Op[]): Op[] {
-  const encoder = new TextEncoder();
-  let bytes = 0;
-  let n = 0;
-  while (n < ops.length && n < MAX_BATCH_OPS) {
-    const size = encoder.encode(JSON.stringify(ops[n])).length + 1;
-    if (n > 0 && bytes + size > MAX_BATCH_BYTES) break;
-    bytes += size;
-    n++;
-  }
-  return ops.slice(0, n);
 }
 
 type Stage = 'ops' | 'photos' | 'changes';
@@ -99,6 +76,7 @@ function failureMessage(e: unknown, stage: Stage): string {
 export class SyncService {
   private readonly api = inject(ApiClient);
   private readonly store = inject(LocalStore);
+  private readonly pusher = inject(SyncPusher);
   private readonly timers = inject(SYNC_TIMERS);
   private readonly document = inject(DOCUMENT);
 
@@ -112,6 +90,9 @@ export class SyncService {
   readonly rejected$: Observable<OpResult> = this.rejectedSubject.asObservable();
   /** Messages à afficher à l'utilisateur (opérations refusées, photos abandonnées). */
   readonly notices$: Observable<string> = this.noticesSubject.asObservable();
+  private readonly closedSubject = new Subject<string>();
+  /** Code de la visite qui vient d'être fermée (ses données en attente passent à l'arrière-plan). */
+  readonly closed$: Observable<string> = this.closedSubject.asObservable();
 
   private code: string | null = null;
   /** Incrémenté à chaque open/close : un cycle d'une session précédente devient inerte. */
@@ -119,6 +100,8 @@ export class SyncService {
   /** Un cycle est en cours (drapeau synchrone : décide seul si un kick lance ou programme). */
   private active = false;
   private running: Promise<void> | null = null;
+  /** Dernière boucle lancée, même d'une session fermée (voir settled). */
+  private lastLoop: Promise<void> = Promise.resolve();
   private followUp = false;
   private timer: unknown = null;
   private attempt = 0;
@@ -158,6 +141,7 @@ export class SyncService {
 
   /** Arrête la synchronisation : minuteries et écouteurs retirés, état vidé. */
   close(): void {
+    const closing = this.code;
     this.generation++;
     this.code = null;
     this.clearTimer();
@@ -171,6 +155,21 @@ export class SyncService {
     this.attempt = 0;
     this.stateSig.set(null);
     this.statusSig.set(IDLE_STATUS);
+    if (closing) this.closedSubject.next(closing);
+  }
+
+  /** Vrai si la visite est celle ouverte (sa synchronisation est faite ici). */
+  isOpen(code: string): boolean {
+    return this.code === code;
+  }
+
+  /**
+   * Résolue quand la dernière boucle lancée est terminée, y compris celle d'une session fermée
+   * dont un appel réseau est encore en cours : l'envoi en arrière-plan l'attend avant de prendre
+   * le relais, pour ne jamais travailler en même temps sur la même visite.
+   */
+  settled(): Promise<void> {
+    return this.lastLoop;
   }
 
   /** Applique une opération localement, la met en file d'envoi et lance un cycle. */
@@ -225,6 +224,8 @@ export class SyncService {
     this.active = true;
     this.clearTimer();
     this.running = this.loop(this.code, this.generation);
+    const previous = this.lastLoop;
+    this.lastLoop = Promise.all([previous, this.running.catch(() => undefined)]).then(() => undefined);
   }
 
   /** Résolue quand aucun cycle n'est en cours. */
@@ -278,41 +279,26 @@ export class SyncService {
     }
   }
 
-  /**
-   * Étape 1 : opérations par lots. Un rejet note (de façon persistante) qu'un rechargement
-   * complet est dû ; il est fait avant le lot suivant, ou au cycle suivant s'il échoue.
-   */
-  private async pushOps(code: string, generation: number): Promise<void> {
+  /** Étape 1 : opérations par lots ; le rechargement dû à un rejet est fait avant le lot suivant. */
+  private pushOps(code: string, generation: number): Promise<void> {
     const alive = () => generation === this.generation;
-    for (;;) {
-      if (await this.store.isReloadNeeded(code)) {
-        if (!alive()) return;
-        await this.reload(code, generation);
-      }
-      const pending = await this.store.pendingOps(code);
-      if (!alive()) return;
-      if (pending.length === 0) return;
-      const batch = takeBatch(pending);
-      const res = await this.api.sendOps(code, batch);
-      if (!alive()) return; // réponse d'une session fermée : rien n'est acquitté, l'envoi sera refait
-      const sent = new Set(batch.map((o) => o.op_id));
-      const done = res.results.filter((r) => sent.has(r.op_id));
-      // aucun résultat : on ne peut pas avancer (photos, changes) avec des opérations non acquittées
-      if (done.length === 0) throw new Error('réponse du serveur sans résultat pour le lot');
-      const rejected = done.filter((d) => d.result === 'rejected');
-      // noté avant l'acquittement : le rechargement survit à une fermeture ou à un arrêt de l'appli
-      if (rejected.length > 0) await this.store.markReloadNeeded(code);
-      await this.store.ackOps(done.map((r) => r.op_id));
-      if (!alive()) return;
-      // émissions sans await depuis le dernier test : elles ne peuvent viser qu'à la session courante
-      for (const r of rejected) {
+    return this.pusher.pushOps({
+      code,
+      alive,
+      beforeBatch: async () => {
+        if (await this.store.isReloadNeeded(code)) {
+          if (!alive()) return;
+          await this.reload(code, generation);
+        }
+      },
+      onRejected: (r) => {
         this.rejectedSubject.next(r);
         this.noticesSubject.next(
           `Une modification a été refusée (${r.reason ? REASON_LABELS[r.reason] : 'raison inconnue'})`,
         );
-      }
-      await this.refreshCounts(code, generation);
-    }
+      },
+      onProgress: () => this.refreshCounts(code, generation),
+    });
   }
 
   /** État complet du serveur + opérations et photos encore en attente. */
@@ -334,15 +320,12 @@ export class SyncService {
   }
 
   /** Étape 2 : photos une par une ; une erreur définitive (4xx) abandonne la photo. */
-  private async pushPhotos(code: string, generation: number): Promise<void> {
-    const photos = await this.store.pendingPhotos(code);
-    for (const p of photos) {
-      if (generation !== this.generation) return;
-      try {
-        await this.api.uploadPhoto(code, { id: p.id, room_id: p.room_id, taken_at: p.taken_at, blob: p.blob });
-      } catch (e) {
-        if (generation !== this.generation) return; // session fermée : la photo reste en file
-        if (!(e instanceof ApiError) || isTransient(e.status)) throw e;
+  private pushPhotos(code: string, generation: number): Promise<void> {
+    return this.pusher.pushPhotos({
+      code,
+      alive: () => generation === this.generation,
+      onProgress: () => this.refreshCounts(code, generation),
+      dropPhoto: async (p, e) => {
         await this.mutate(async () => {
           const current = this.stateSig();
           if (generation !== this.generation || !current) return;
@@ -352,13 +335,8 @@ export class SyncService {
         if (generation !== this.generation) return;
         this.noticesSubject.next(`Une photo n'a pas pu être envoyée et a été abandonnée (${e.message})`);
         await this.refreshCounts(code, generation);
-        continue;
-      }
-      // 2xx : la photo est sur le serveur ; on l'acquitte même si la session a été fermée
-      await this.store.ackPhoto(p.id);
-      if (generation !== this.generation) return;
-      await this.refreshCounts(code, generation);
-    }
+      },
+    });
   }
 
   /** Étape 3 : changements depuis seq, fusion, puis réapplication des opérations en attente. */

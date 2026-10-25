@@ -38,6 +38,9 @@
                 {{ v.code }}
               }
             </span>
+            @if (pendingText(v.code); as text) {
+              <span class="pending" data-test="pending">{{ text }}</span>
+            }
           </a>
           <button mat-button type="button" data-test="remove" (click)="remove(v.code)">Retirer</button>
         </li>
