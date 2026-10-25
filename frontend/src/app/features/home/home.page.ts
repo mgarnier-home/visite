@@ -54,6 +54,11 @@ export class HomePage implements OnInit {
     this.busy.set(true);
     this.error.set('');
     try {
+      // Déjà sur cet appareil : l'état local (et ses modifications en attente) fait foi.
+      if (await this.store.getState(code)) {
+        await this.router.navigate(['/v', code]);
+        return;
+      }
       await this.api.join(code);
       const state = await this.api.state(code);
       await this.store.saveState(code, state);

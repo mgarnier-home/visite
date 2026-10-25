@@ -16,7 +16,7 @@ const stateOf = (code: string) =>
 
 describe('HomePage', () => {
   const api = { join: vi.fn(), state: vi.fn() };
-  const store = { saveState: vi.fn(), listVisits: vi.fn(), removeVisit: vi.fn() };
+  const store = { saveState: vi.fn(), getState: vi.fn(), listVisits: vi.fn(), removeVisit: vi.fn() };
   const navigate = vi.fn();
   const snack = { open: vi.fn() };
 
@@ -62,6 +62,17 @@ describe('HomePage', () => {
     expect(api.join).toHaveBeenCalledWith('maison-x');
     expect(api.state).toHaveBeenCalledWith('maison-x');
     expect(store.saveState).toHaveBeenCalledWith('maison-x', stateOf('maison-x'));
+    expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
+  });
+
+  it('visite déjà enregistrée localement : navigue sans écraser l\'état local', async () => {
+    store.getState.mockResolvedValue(stateOf('maison-x'));
+    const fixture = await setup();
+    await join(fixture, 'maison-x');
+    expect(store.getState).toHaveBeenCalledWith('maison-x');
+    expect(api.join).not.toHaveBeenCalled();
+    expect(api.state).not.toHaveBeenCalled();
+    expect(store.saveState).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
   });
 
