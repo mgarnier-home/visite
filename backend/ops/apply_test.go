@@ -320,7 +320,10 @@ func TestSharedTargets(t *testing.T) {
 		{e.question(), "asked", true, "applied"},
 		{room, "area_m2", 12.5, "applied"},
 		{room, "answer", "x", "rejected/invalid"},
-		{room, "area_m2", nil, "rejected/invalid"},
+		{room, "area_m2", nil, "applied"},
+		{casePt, "blocking", nil, "rejected/invalid"},
+		{casePt, "value", nil, "rejected/invalid"},
+		{e.question(), "answer", nil, "rejected/invalid"},
 		{"inconnu", "area_m2", 3, "rejected/not_found"},
 	}
 	for _, c := range cases {
@@ -328,6 +331,20 @@ func TestSharedTargets(t *testing.T) {
 		if got != c.want {
 			t.Errorf("set_shared %s=%v : %s, veut %s", c.field, c.value, got, c.want)
 		}
+	}
+}
+
+func TestSharedNullClearsWorks(t *testing.T) {
+	e := newEnv(t)
+	pt := e.pointOfType(e.code, "case")
+	if got := e.applyOne(devB, op("set_shared", 100, map[string]any{"target_id": pt, "field": "works_eur", "value": 500})); got != "applied" {
+		t.Fatalf("works 500 : %s", got)
+	}
+	if got := e.applyOne(devB, op("set_shared", 200, map[string]any{"target_id": pt, "field": "works_eur", "value": nil})); got != "applied" {
+		t.Fatalf("works null : %s", got)
+	}
+	if v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'works_eur'`, pt); v != "null" {
+		t.Errorf("valeur stockée = %q, veut null", v)
 	}
 }
 

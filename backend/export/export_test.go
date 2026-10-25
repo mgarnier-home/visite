@@ -122,6 +122,19 @@ func TestHiddenRoomExcluded(t *testing.T) {
 	}
 }
 
+func TestNullWorksIsEmptyAndNotCounted(t *testing.T) {
+	d := fixture()
+	d.Shared["p-fen"]["works_eur"] = raw("null")
+	d.Shared["r-salon"]["area_m2"] = raw("null")
+	out := string(write(t, d, ';', true))
+	if strings.Contains(out, "null") {
+		t.Error("\"null\" apparaît dans l'export")
+	}
+	if !strings.Contains(out, ";total travaux;0;") {
+		t.Errorf("total travaux attendu 0 :\n%s", out)
+	}
+}
+
 func TestAgeEmptyWithoutYear(t *testing.T) {
 	d := fixture()
 	d.Year = 0

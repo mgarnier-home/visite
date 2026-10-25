@@ -129,6 +129,10 @@ const (
 // p n'est non nil que pour TargetPoint (type et options du point).
 func ValidSharedValue(target TargetKind, p *Point, field string, raw json.RawMessage) error {
 	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		// null = « effacé » : permis seulement pour les travaux d'un point et la surface d'une pièce.
+		if (target == TargetPoint && field == "works_eur") || (target == TargetRoom && field == "area_m2") {
+			return nil
+		}
 		return invalid("valeur nulle interdite pour %q", field)
 	}
 	switch {
