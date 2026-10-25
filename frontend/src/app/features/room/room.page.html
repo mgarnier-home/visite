@@ -47,9 +47,10 @@
         min="0"
         step="any"
         data-test="area"
-        [value]="area() ?? ''"
+        [value]="shown(roomKey('area'), area())"
         [disabled]="closed()"
-        (blur)="saveArea($event)"
+        (input)="onInput(roomKey('area'), $event)"
+        (blur)="onBlur(roomKey('area'), $event)"
       />
     </label>
 
@@ -85,9 +86,10 @@
               rows="2"
               aria-label="Réponse"
               placeholder="Réponse"
-              [value]="q.answer"
+              [value]="shown(answerKey(q.question.id), q.answer)"
               [disabled]="closed()"
-              (blur)="saveAnswer(q.question.id, q.answer, $event)"
+              (input)="onInput(answerKey(q.question.id), $event)"
+              (blur)="onBlur(answerKey(q.question.id), $event)"
             ></textarea>
           </article>
         }
@@ -96,7 +98,8 @@
 
     <label class="field">
       <span>Mon commentaire (privé)</span>
-      <textarea data-test="comment" rows="3" [value]="comment()" [disabled]="closed()" (blur)="saveComment($event)"></textarea>
+      <textarea data-test="comment" rows="3" [value]="shown(roomKey('comment'), comment())" [disabled]="closed()"
+        (input)="onInput(roomKey('comment'), $event)" (blur)="onBlur(roomKey('comment'), $event)"></textarea>
     </label>
 
     <h3>Photos</h3>

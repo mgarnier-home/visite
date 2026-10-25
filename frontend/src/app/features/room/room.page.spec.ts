@@ -247,4 +247,70 @@ describe('RoomPage', () => {
     await vi.waitFor(() => expect(sync.dispatch).toHaveBeenCalledWith('hide_room', { room_id: 'r1' }));
     await vi.waitFor(() => expect(nav).toHaveBeenCalledWith(['/v', 'maison-x', 'rooms']));
   });
+
+  it('navigation sans perte de focus : la réponse saisie est enregistrée pour l\'ancienne question', async () => {
+    const { el } = await setup();
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const answer = q<HTMLTextAreaElement>(el, '[data-test=answer]');
+    answer.value = 'Pompe à chaleur';
+    answer.dispatchEvent(new Event('input'));
+    q<HTMLButtonElement>(el, '[data-test=next]').click();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q1', field: 'answer', value: 'Pompe à chaleur' });
+  });
+
+  it('changement de pièce par l\'URL : le commentaire en cours est enregistré pour l\'ancienne pièce', async () => {
+    const { fixture, el } = await setup();
+    const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
+    comment.value = 'À revoir';
+    comment.dispatchEvent(new Event('input'));
+    params.next(convertToParamMap({ roomId: 'r2' }));
+    await settle(fixture);
+    expect(sync.dispatch).toHaveBeenCalledWith('set_comment', { room_id: 'r1', text: 'À revoir' });
+    expect(q<HTMLTextAreaElement>(el, '[data-test=comment]').value).toBe('');
+  });
+
+  it('destruction de la page : le commentaire en cours est enregistré', async () => {
+    const { fixture, el } = await setup();
+    const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
+    comment.value = 'Humide';
+    comment.dispatchEvent(new Event('input'));
+    fixture.destroy();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_comment', { room_id: 'r1', text: 'Humide' });
+  });
+
+  it('une réponse distante n\'écrase pas le champ en cours de saisie', async () => {
+    const { fixture, el } = await setup();
+    const answer = q<HTMLTextAreaElement>(el, '[data-test=answer]');
+    answer.focus();
+    answer.value = 'Électrique';
+    answer.dispatchEvent(new Event('input'));
+    const s = makeState();
+    s.shared = s.shared.map((v) => (v.field === 'answer' ? { ...v, value: 'Fioul', author: 3 } : v));
+    state.set(s);
+    await settle(fixture);
+    expect(answer.value).toBe('Électrique');
+    answer.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q1', field: 'answer', value: 'Électrique' });
+  });
+
+  it('masquage : pas de navigation si hide_room échoue', async () => {
+    sync.dispatch.mockRejectedValue(new Error('plein'));
+    const { fixture, el } = await setup();
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    q<HTMLButtonElement>(el, '[data-test=hide]').click();
+    await settle(fixture);
+    q<HTMLButtonElement>(document.body, '[data-test=confirm]').click();
+    await vi.waitFor(() => expect(snack.open).toHaveBeenCalled());
+    expect(nav).not.toHaveBeenCalled();
+  });
+
+  it('surface : une saisie partielle invalide (badInput) n\'envoie rien', async () => {
+    const { el } = await setup();
+    const area = q<HTMLInputElement>(el, '[data-test=area]');
+    Object.defineProperty(area, 'validity', { value: { badInput: true } });
+    area.value = '';
+    area.dispatchEvent(new Event('input'));
+    area.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
 });

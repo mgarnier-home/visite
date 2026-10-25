@@ -135,4 +135,16 @@ describe('PointCardComponent', () => {
     works.dispatchEvent(new Event('change'));
     expect(host.setWorks).toHaveBeenCalledTimes(2);
   });
+
+  it('menu : Échap, même depuis le champ Travaux, ferme le menu', async () => {
+    const { fixture, el } = setup();
+    (el.querySelector('[data-test=menu-btn]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const works = document.body.querySelector('[data-test=works-input]') as HTMLInputElement;
+    expect(works).not.toBeNull();
+    works.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    fixture.detectChanges();
+    await vi.waitFor(() => expect(document.body.querySelector('[data-test=works-input]')).toBeNull());
+  });
 });

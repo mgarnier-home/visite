@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -147,7 +147,13 @@ export class RoomPage {
       this.sync.status(); // la file change quand une photo est envoyée
       if (code) void this.refreshPending(code, ids);
     });
+    // navigation par l'URL, retour arrière : les brouillons de la pièce quittée sont enregistrés
+    effect(() => {
+      this.roomId();
+      untracked(() => void this.flush());
+    });
     inject(DestroyRef).onDestroy(() => {
+      void this.flush();
       this.destroyed = true;
       this.refreshToken++;
       for (const url of this.pendingUrls.values()) URL.revokeObjectURL(url);
@@ -175,7 +181,9 @@ export class RoomPage {
   }
 
   protected goTo(room: { id: string } | null): void {
-    if (room) void this.router.navigate(['/v', this.code(), 'room', room.id]);
+    if (!room) return;
+    void this.flush();
+    void this.router.navigate(['/v', this.code(), 'room', room.id]);
   }
   protected goPrev(): void {
     this.goTo(this.prevRoom());
@@ -185,41 +193,93 @@ export class RoomPage {
   }
 
   /** Envoie une opération ; l'échec (stockage local plein) est signalé. */
-  private async run(type: OpType, payload: object): Promise<void> {
+  private async run(type: OpType, payload: object): Promise<boolean> {
     try {
       await this.sync.dispatch(type, payload);
+      return true;
     } catch {
       this.snack.open('Modification non enregistrée', 'OK', { duration: 5000 });
+      return false;
     }
   }
 
-  protected setShared(targetId: string, field: SharedField, value: unknown): Promise<void> {
+  protected setShared(targetId: string, field: SharedField, value: unknown): Promise<boolean> {
     return this.run('set_shared', { target_id: targetId, field, value });
   }
-  protected rate(pointId: string, value: number | null): Promise<void> {
+  protected rate(pointId: string, value: number | null): Promise<boolean> {
     return this.run('set_rating', { point_id: pointId, value });
   }
 
-  protected setAsked(questionId: string, asked: boolean): Promise<void> {
+  protected setAsked(questionId: string, asked: boolean): Promise<boolean> {
     return this.setShared(questionId, 'asked', asked);
   }
-  protected saveAnswer(questionId: string, current: string, event: Event): Promise<void> | void {
-    const value = (event.target as HTMLTextAreaElement).value;
-    if (value !== current) return this.setShared(questionId, 'answer', value);
+  // --- brouillons : texte saisi pas encore enregistré, clé `answer:<id>`, `comment:<roomId>` ou `area:<roomId>`
+  private readonly drafts = signal<Readonly<Record<string, string>>>({});
+
+  /** Valeur affichée : le brouillon s'il existe (la synchro ne l'écrase pas), sinon l'état. */
+  protected shown(key: string, fromState: string | number | null): string {
+    return this.drafts()[key] ?? String(fromState ?? '');
   }
-  protected saveComment(event: Event): Promise<void> | void {
-    const value = (event.target as HTMLTextAreaElement).value;
-    if (value !== this.comment()) return this.run('set_comment', { room_id: this.roomId(), text: value });
+  protected answerKey(questionId: string): string {
+    return `answer:${questionId}`;
   }
-  protected saveArea(event: Event): Promise<void> | void {
-    const input = event.target as HTMLInputElement;
-    const raw = input.value.trim();
-    const value = raw === '' ? null : Number(raw);
-    if (value !== null && (!Number.isFinite(value) || value < 0)) {
-      input.value = String(this.area() ?? ''); // saisie refusée : on restaure la valeur
+  protected roomKey(kind: 'comment' | 'area'): string {
+    return `${kind}:${this.roomId()}`;
+  }
+
+  protected onInput(key: string, event: Event): void {
+    const input = event.target as HTMLInputElement | HTMLTextAreaElement;
+    if (input instanceof HTMLInputElement && input.validity.badInput) {
+      this.dropDraft(key); // saisie partielle invalide : rien à enregistrer
       return;
     }
-    if (value !== this.area()) return this.setShared(this.roomId(), 'area_m2', value);
+    this.drafts.update((d) => ({ ...d, [key]: input.value }));
+  }
+
+  /** Perte du focus : enregistre le brouillon, ou la valeur du champ si aucun brouillon n'existe. */
+  protected onBlur(key: string, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement | HTMLTextAreaElement;
+    if (input instanceof HTMLInputElement && input.validity.badInput) return Promise.resolve();
+    if (!(key in this.drafts())) this.drafts.update((d) => ({ ...d, [key]: input.value }));
+    return this.flushKey(key);
+  }
+
+  private dropDraft(key: string): void {
+    this.drafts.update((d) => {
+      const { [key]: _removed, ...rest } = d;
+      return rest;
+    });
+  }
+
+  /** Enregistre un brouillon (avec l'identifiant de SA pièce) s'il diffère de l'état, puis l'efface. */
+  private async flushKey(key: string): Promise<void> {
+    const text = this.drafts()[key];
+    if (text === undefined) return;
+    const sep = key.indexOf(':');
+    const kind = key.slice(0, sep);
+    const id = key.slice(sep + 1);
+    const s = this.state();
+    if (kind === 'answer') {
+      const current = s?.shared.find((v) => v.target_id === id && v.field === 'answer')?.value;
+      if (text !== (typeof current === 'string' ? current : '')) await this.setShared(id, 'answer', text);
+    } else if (kind === 'comment') {
+      const current = s?.comments.find((c) => c.room_id === id)?.text ?? '';
+      if (text !== current) await this.run('set_comment', { room_id: id, text });
+    } else if (kind === 'area') {
+      const raw = text.trim();
+      const value = raw === '' ? null : Number(raw);
+      const current = s?.shared.find((v) => v.target_id === id && v.field === 'area_m2')?.value;
+      const currentNum = typeof current === 'number' ? current : null;
+      if ((value === null || (Number.isFinite(value) && value >= 0)) && value !== currentNum) {
+        await this.setShared(id, 'area_m2', value);
+      }
+    }
+    if (this.drafts()[key] === text) this.dropDraft(key);
+  }
+
+  /** Enregistre tous les brouillons (changement de pièce, masquage, destruction). */
+  private flush(): Promise<unknown> {
+    return Promise.all(Object.keys(this.drafts()).map((k) => this.flushKey(k)));
   }
 
   protected startRename(): void {
@@ -264,8 +324,10 @@ export class RoomPage {
         .afterClosed(),
     );
     if (!ok) return;
-    await this.run('hide_room', { room_id: this.roomId() });
-    void this.router.navigate(['/v', this.code(), 'rooms']);
+    await this.flush();
+    if (await this.run('hide_room', { room_id: this.roomId() })) {
+      void this.router.navigate(['/v', this.code(), 'rooms']);
+    }
   }
 
   protected async addPhoto(blob: Blob): Promise<void> {

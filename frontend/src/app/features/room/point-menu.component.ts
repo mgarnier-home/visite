@@ -15,7 +15,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
     </button>
     <mat-menu #menu="matMenu">
       <!-- les clics dans le panneau ne doivent pas le fermer -->
-      <div class="panel" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" role="presentation">
+      <div class="panel" (click)="$event.stopPropagation()" (keydown)="onKeydown($event)" role="presentation">
         <mat-slide-toggle data-test="blocking-toggle" [checked]="blocking()" [disabled]="disabled()"
           (change)="blockingChange.emit($event.checked)">Point bloquant</mat-slide-toggle>
         <label class="works">
@@ -42,8 +42,15 @@ export class PointMenuComponent {
   /** Entier ≥ 0, ou `null` quand le champ est vide. */
   readonly worksChange = output<number | null>();
 
+  /** Le menu détourne flèches, Entrée, espace et recherche par lettre ; Échap et Tab doivent le traverser. */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' || event.key === 'Tab') return;
+    event.stopPropagation();
+  }
+
   protected onWorks(event: Event): void {
     const input = event.target as HTMLInputElement;
+    if (input.validity.badInput) return; // saisie partielle invalide : on ne l'interprète pas
     const raw = input.value.trim();
     if (raw === '') {
       this.worksChange.emit(null);
