@@ -44,3 +44,7 @@ tasks:
     dir: ./frontend
     cmds:
       - npx ng test --watch=false
+  e2e:
+    cmds:
+      - task: build
+      - cd frontend && npx playwright test
