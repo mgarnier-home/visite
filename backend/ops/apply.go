@@ -17,6 +17,15 @@ import (
 // le seq courant de la visite. Une erreur (base, visite inconnue) interrompt le lot.
 func ApplyBatch(ctx context.Context, s *store.Store, code, device string, batch []Op, now time.Time) ([]Result, int64, error) {
 	results := make([]Result, 0, len(batch))
+	// Vérifiée une fois pour tout le lot : sans elle, un refus précoce (type inconnu,
+	// op_id vide) échouerait plus loin sur la clé étrangère du journal.
+	exists, err := s.VisitExists(ctx, code)
+	if err != nil {
+		return results, 0, err
+	}
+	if !exists {
+		return results, 0, store.ErrNotFound
+	}
 	for _, op := range batch {
 		r, err := applyOne(ctx, s, code, device, op, now)
 		if err != nil {
@@ -25,7 +34,7 @@ func ApplyBatch(ctx context.Context, s *store.Store, code, device string, batch 
 		results = append(results, r)
 	}
 	var seq int64
-	err := s.InTx(ctx, func(tx *store.Tx) error {
+	err = s.InTx(ctx, func(tx *store.Tx) error {
 		v, err := tx.Visit(code)
 		seq = v.Seq
 		return err
@@ -306,17 +315,7 @@ func (a *applier) addPoint() error {
 	if label == "" {
 		return reject(ReasonInvalid)
 	}
-	// Mêmes règles que pour un point du modèle : options exigées pour un constat, interdites sinon.
-	switch p.Type {
-	case model.TypeConstat:
-		if len(p.Options) == 0 {
-			return reject(ReasonInvalid)
-		}
-	case model.TypeNote, model.TypeCase:
-		if len(p.Options) > 0 {
-			return reject(ReasonInvalid)
-		}
-	default:
+	if model.ValidPointShape(p.Type, p.Options) != nil {
 		return reject(ReasonInvalid)
 	}
 	if err := a.newID(p.ID); err != nil {
@@ -534,6 +533,10 @@ func ficheFields(f model.Fiche) (map[string]json.RawMessage, error) {
 }
 
 func (a *applier) closeVisit() error {
+	var p struct{}
+	if err := a.decode(&p); err != nil {
+		return err
+	}
 	seq, err := a.tx.NextSeq(a.code)
 	if err != nil {
 		return err

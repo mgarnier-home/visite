@@ -46,22 +46,31 @@ func (t Template) Validate() error {
 			if err := claimID(pointIDs, "point", p.ID); err != nil {
 				return err
 			}
-			switch p.Type {
-			case TypeConstat:
-				if len(p.Options) == 0 {
-					return invalid("point %q : un constat exige des options", p.ID)
-				}
-			case TypeNote, TypeCase:
-				if len(p.Options) > 0 {
-					return invalid("point %q : options interdites pour le type %q", p.ID, p.Type)
-				}
-			default:
-				return invalid("point %q : type inconnu %q", p.ID, p.Type)
+			if err := ValidPointShape(p.Type, p.Options); err != nil {
+				return fmt.Errorf("point %q : %w", p.ID, err)
 			}
 			if !(p.Weight > 0) {
 				return invalid("point %q : le poids doit être > 0", p.ID)
 			}
 		}
+	}
+	return nil
+}
+
+// ValidPointShape vérifie le type d'un point et ses options : un constat exige des
+// options, une note ou une case n'en a pas.
+func ValidPointShape(typ PointType, options []string) error {
+	switch typ {
+	case TypeConstat:
+		if len(options) == 0 {
+			return invalid("un constat exige des options")
+		}
+	case TypeNote, TypeCase:
+		if len(options) > 0 {
+			return invalid("options interdites pour le type %q", typ)
+		}
+	default:
+		return invalid("type de point inconnu %q", typ)
 	}
 	return nil
 }

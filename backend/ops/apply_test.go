@@ -266,6 +266,41 @@ func TestSharedLastWriteWins(t *testing.T) {
 	}
 }
 
+func TestSharedEqualTimestamp(t *testing.T) {
+	e := newEnv(t)
+	q := e.question()
+	e.apply(devA, op("set_shared", 300, map[string]any{"target_id": q, "field": "answer", "value": "de A"}))
+	before := e.visitSeq()
+	// Même horodatage, B > A : l'écriture de B l'emporte et incrémente seq.
+	res, seq := e.apply(devB, op("set_shared", 300, map[string]any{"target_id": q, "field": "answer", "value": "de B"}))
+	if outcome(res[0]) != "applied" || seq != before+1 {
+		t.Fatalf("B à égalité : %+v, seq %d, veut %d", res, seq, before+1)
+	}
+	v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'answer'`, q)
+	if dev := e.queryString(`SELECT device_id FROM shared_values WHERE target_id = ? AND field = 'answer'`, q); v != `"de B"` || dev != devB {
+		t.Errorf("valeur = %s par %s, veut \"de B\" par B", v, dev)
+	}
+	if s := e.queryInt(`SELECT seq FROM shared_values WHERE target_id = ? AND field = 'answer'`, q); s != seq {
+		t.Errorf("seq de la valeur = %d, veut %d", s, seq)
+	}
+}
+
+func TestSharedLosingWriteKeepsSeq(t *testing.T) {
+	e := newEnv(t)
+	q := e.question()
+	_, before := e.apply(devB, op("set_shared", 200, map[string]any{"target_id": q, "field": "asked", "value": true}))
+	res, seq := e.apply(devA, op("set_shared", 100, map[string]any{"target_id": q, "field": "asked", "value": false}))
+	if outcome(res[0]) != "applied" || seq != before {
+		t.Errorf("écriture perdante : %+v, seq %d, veut %d inchangé", res, seq, before)
+	}
+	if v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'asked'`, q); v != "true" {
+		t.Errorf("valeur = %s, veut true", v)
+	}
+	if n := e.queryInt(`SELECT COUNT(*) FROM ops WHERE device_id = ?`, devA); n != 1 {
+		t.Errorf("%d ops journalisées pour A, veut 1", n)
+	}
+}
+
 func TestSharedTargets(t *testing.T) {
 	e := newEnv(t)
 	casePt := e.pointOfType(e.code, "case")
@@ -463,6 +498,12 @@ func TestClosedVisitRejects(t *testing.T) {
 	e := newEnv(t)
 	if got := e.applyOne(devB, op("close_visit", 100, map[string]any{})); got != "rejected/forbidden" {
 		t.Errorf("close_visit par B avant clôture : %s, veut rejected/forbidden", got)
+	}
+	for _, bad := range []string{`[1]`, `"x"`, `3`} {
+		o := ops.Op{OpID: uuid.NewString(), Type: "close_visit", ClientTS: 100, Payload: json.RawMessage(bad)}
+		if got := e.applyOne(devA, o); got != "rejected/invalid" {
+			t.Errorf("close_visit payload %s : %s, veut rejected/invalid", bad, got)
+		}
 	}
 	res, seq := e.apply(devA, op("close_visit", 100, map[string]any{}))
 	if outcome(res[0]) != "applied" {
@@ -742,9 +783,16 @@ func TestEmptyBatchResultsNotNil(t *testing.T) {
 
 func TestUnknownVisit(t *testing.T) {
 	e := newEnv(t)
-	_, _, err := ops.ApplyBatch(context.Background(), e.s, "nulle-part", devB,
-		[]ops.Op{op("hide_room", 1, map[string]any{"room_id": "x"})}, testNow)
-	if !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("visite inconnue : err = %v, veut ErrNotFound", err)
+	batches := map[string][]ops.Op{
+		"lot vide":     {},
+		"hide_room":    {op("hide_room", 1, map[string]any{"room_id": "x"})},
+		"type inconnu": {op("drop_table", 1, map[string]any{})},
+		"op_id vide":   {{Type: "hide_room", ClientTS: 1, Payload: json.RawMessage(`{}`)}},
+	}
+	for name, batch := range batches {
+		_, _, err := ops.ApplyBatch(context.Background(), e.s, "nulle-part", devB, batch, testNow)
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("visite inconnue, %s : err = %v, veut ErrNotFound", name, err)
+		}
 	}
 }

@@ -77,6 +77,33 @@ func TestTemplateValidate(t *testing.T) {
 	}
 }
 
+func TestValidPointShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		typ     PointType
+		options []string
+		ok      bool
+	}{
+		{"constat avec options", TypeConstat, []string{"a"}, true},
+		{"constat sans options", TypeConstat, nil, false},
+		{"constat options vides", TypeConstat, []string{}, false},
+		{"note sans options", TypeNote, nil, true},
+		{"case sans options", TypeCase, []string{}, true},
+		{"note avec options", TypeNote, []string{"a"}, false},
+		{"case avec options", TypeCase, []string{"a"}, false},
+		{"type inconnu", "autre", nil, false},
+	}
+	for _, tt := range tests {
+		err := ValidPointShape(tt.typ, tt.options)
+		if (err == nil) != tt.ok {
+			t.Errorf("%s : err = %v, ok attendu = %v", tt.name, err, tt.ok)
+		}
+		if err != nil && !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s : l'erreur doit envelopper ErrInvalid : %v", tt.name, err)
+		}
+	}
+}
+
 func TestTemplateValidateIDs(t *testing.T) {
 	pt := func(id string) TemplatePoint {
 		return TemplatePoint{ID: id, Label: "l", Type: TypeNote, Weight: 1}
