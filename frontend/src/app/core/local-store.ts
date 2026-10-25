@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { Op, VisitState } from './api.types';
 import { db, PhotoRow, VisitRow } from './db';
 
+const reloadKey = (code: string) => `reload:${code}`;
+
 /** Levée quand on supprime une visite qui a encore des données non synchronisées. */
 export class PendingDataError extends Error {
   constructor(code: string) {
@@ -35,12 +37,28 @@ export class LocalStore {
     return rows.map((r) => r.op);
   }
 
+  /** Met l'opération en file et enregistre le nouvel état dans une même transaction. */
+  async enqueueWithState(code: string, op: Op, state: VisitState): Promise<void> {
+    await db.transaction('rw', db.outbox, db.visits, async () => {
+      await db.outbox.add({ op_id: op.op_id, code, op });
+      await db.visits.put({ code, state });
+    });
+  }
+
   async ackOps(opIds: string[]): Promise<void> {
     await db.outbox.where('op_id').anyOf(opIds).delete();
   }
 
   async addPhoto(rec: PhotoRow): Promise<void> {
     await db.photos.put(rec);
+  }
+
+  /** Enregistre la photo en attente et le nouvel état dans une même transaction. */
+  async addPhotoWithState(rec: PhotoRow, state: VisitState): Promise<void> {
+    await db.transaction('rw', db.photos, db.visits, async () => {
+      await db.photos.put(rec);
+      await db.visits.put({ code: rec.code, state });
+    });
   }
 
   pendingPhotos(code: string): Promise<PhotoRow[]> {
@@ -51,13 +69,27 @@ export class LocalStore {
     await db.photos.delete(id);
   }
 
+  /** Un rejet du serveur impose de recharger l'état complet de la visite (persistant). */
+  async markReloadNeeded(code: string): Promise<void> {
+    await db.meta.put({ key: reloadKey(code), value: true });
+  }
+
+  async isReloadNeeded(code: string): Promise<boolean> {
+    return (await db.meta.get(reloadKey(code)))?.value === true;
+  }
+
+  async clearReloadNeeded(code: string): Promise<void> {
+    await db.meta.delete(reloadKey(code));
+  }
+
   async removeVisit(code: string): Promise<void> {
-    await db.transaction('rw', db.visits, db.outbox, db.photos, async () => {
+    await db.transaction('rw', [db.visits, db.outbox, db.photos, db.meta], async () => {
       const pending =
         (await db.outbox.where('code').equals(code).count()) +
         (await db.photos.where('code').equals(code).count());
       if (pending > 0) throw new PendingDataError(code);
       await db.visits.delete(code);
+      await db.meta.delete(reloadKey(code));
     });
   }
 }

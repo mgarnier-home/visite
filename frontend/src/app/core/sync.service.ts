@@ -116,12 +116,12 @@ export class SyncService {
   private code: string | null = null;
   /** Incrémenté à chaque open/close : un cycle d'une session précédente devient inerte. */
   private generation = 0;
+  /** Un cycle est en cours (drapeau synchrone : décide seul si un kick lance ou programme). */
+  private active = false;
   private running: Promise<void> | null = null;
   private followUp = false;
   private timer: unknown = null;
   private attempt = 0;
-  /** Un rejet a été reçu mais l'état complet n'a pas encore pu être rechargé. */
-  private reloadNeeded = false;
   /** Sérialise les modifications de l'état (dispatch, addPhoto, fusions du cycle). */
   private mutations: Promise<unknown> = Promise.resolve();
 
@@ -165,10 +165,10 @@ export class SyncService {
     win?.removeEventListener('online', this.onOnline);
     win?.removeEventListener('offline', this.onOffline);
     this.document.removeEventListener('visibilitychange', this.onVisibility);
+    this.active = false;
     this.running = null;
     this.followUp = false;
     this.attempt = 0;
-    this.reloadNeeded = false;
     this.stateSig.set(null);
     this.statusSig.set(IDLE_STATUS);
   }
@@ -186,10 +186,10 @@ export class SyncService {
       const current = this.stateSig();
       if (generation !== this.generation || !current) throw new Error('Visite fermée');
       const next = applyOp(current, op);
-      this.stateSig.set(next);
-      // file d'abord : une opération enregistrée n'est jamais perdue
-      await this.store.enqueue(code, op);
-      await this.store.saveState(code, next);
+      // file et état dans une même transaction ; l'affichage ne change qu'une fois écrit
+      // (stockage plein : l'erreur remonte à l'écran, rien n'est affiché ni mis en file)
+      await this.store.enqueueWithState(code, op, next);
+      if (generation === this.generation) this.stateSig.set(next);
     });
     await this.refreshCounts(code, generation);
     this.kick();
@@ -208,9 +208,8 @@ export class SyncService {
         ...current,
         photos: [...current.photos, { id, room_id: roomId, author: current.me.number, taken_at: takenAt }],
       };
-      this.stateSig.set(next);
-      await this.store.addPhoto({ id, code, room_id: roomId, taken_at: takenAt, blob });
-      await this.store.saveState(code, next);
+      await this.store.addPhotoWithState({ id, code, room_id: roomId, taken_at: takenAt, blob }, next);
+      if (generation === this.generation) this.stateSig.set(next);
     });
     await this.refreshCounts(code, generation);
     this.kick();
@@ -219,29 +218,30 @@ export class SyncService {
   /** Lance un cycle maintenant, ou en programme un seul de plus si un cycle est en cours. */
   kick(): void {
     if (!this.code) return;
-    if (this.running) {
+    if (this.active) {
       this.followUp = true;
       return;
     }
+    this.active = true;
     this.clearTimer();
-    const run = this.loop(this.code, this.generation).finally(() => {
-      if (this.running === run) this.running = null;
-    });
-    this.running = run;
+    this.running = this.loop(this.code, this.generation);
   }
 
   /** Résolue quand aucun cycle n'est en cours. */
   whenIdle(): Promise<void> {
-    return this.running ?? Promise.resolve();
+    return this.active && this.running ? this.running : Promise.resolve();
   }
 
   private async loop(code: string, generation: number): Promise<void> {
     let ok: boolean;
-    do {
+    for (;;) {
       this.followUp = false;
       ok = await this.cycle(code, generation);
-    } while (this.followUp && generation === this.generation);
-    if (generation !== this.generation) return;
+      if (generation !== this.generation) return; // session fermée : close() a tout remis à zéro
+      if (!this.followUp) break;
+    }
+    // dans la même tâche synchrone que le dernier test de followUp : aucun kick ne peut se perdre
+    this.active = false;
     if (ok) {
       this.attempt = 0;
       this.schedule(POLL_DELAY, () => {
@@ -257,13 +257,17 @@ export class SyncService {
   /** Un cycle complet ; faux en cas d'échec (le cycle s'arrête à la première erreur). */
   private async cycle(code: string, generation: number): Promise<boolean> {
     let stage: Stage = 'ops';
+    const alive = () => generation === this.generation;
     try {
       await this.pushOps(code, generation);
+      if (!alive()) return false;
       stage = 'photos';
       await this.pushPhotos(code, generation);
+      if (!alive()) return false;
       stage = 'changes';
       await this.pullChanges(code, generation);
-      if (generation === this.generation) this.patchStatus({ error: null });
+      if (!alive()) return false;
+      this.patchStatus({ error: null });
       return true;
     } catch (e) {
       if (generation === this.generation) {
@@ -274,28 +278,44 @@ export class SyncService {
     }
   }
 
-  /** Étape 1 : opérations par lots ; en cas de rejet, rechargement complet de l'état. */
+  /**
+   * Étape 1 : opérations par lots. Un rejet note (de façon persistante) qu'un rechargement
+   * complet est dû ; il est fait avant le lot suivant, ou au cycle suivant s'il échoue.
+   */
   private async pushOps(code: string, generation: number): Promise<void> {
+    const alive = () => generation === this.generation;
     for (;;) {
+      if (await this.store.isReloadNeeded(code)) {
+        if (!alive()) return;
+        await this.reload(code, generation);
+      }
       const pending = await this.store.pendingOps(code);
-      if (generation !== this.generation || pending.length === 0) break;
+      if (!alive()) return;
+      if (pending.length === 0) return;
       const batch = takeBatch(pending);
       const res = await this.api.sendOps(code, batch);
-      if (generation !== this.generation) return;
+      if (!alive()) return; // réponse d'une session fermée : rien n'est acquitté, l'envoi sera refait
       const sent = new Set(batch.map((o) => o.op_id));
       const done = res.results.filter((r) => sent.has(r.op_id));
-      if (done.length === 0) break; // aucun résultat : les opérations restent en file
+      // aucun résultat : on ne peut pas avancer (photos, changes) avec des opérations non acquittées
+      if (done.length === 0) throw new Error('réponse du serveur sans résultat pour le lot');
+      const rejected = done.filter((d) => d.result === 'rejected');
+      // noté avant l'acquittement : le rechargement survit à une fermeture ou à un arrêt de l'appli
+      if (rejected.length > 0) await this.store.markReloadNeeded(code);
       await this.store.ackOps(done.map((r) => r.op_id));
+      if (!alive()) return;
       await this.refreshCounts(code, generation);
-      for (const r of done.filter((d) => d.result === 'rejected')) {
-        this.reloadNeeded = true;
+      for (const r of rejected) {
         this.rejectedSubject.next(r);
         this.noticesSubject.next(
           `Une modification a été refusée (${r.reason ? REASON_LABELS[r.reason] : 'raison inconnue'})`,
         );
       }
     }
-    if (!this.reloadNeeded || generation !== this.generation) return;
+  }
+
+  /** État complet du serveur + opérations et photos encore en attente. */
+  private async reload(code: string, generation: number): Promise<void> {
     const full = await this.api.state(code);
     await this.mutate(async () => {
       if (generation !== this.generation) return;
@@ -308,7 +328,7 @@ export class SyncService {
         .map((x) => ({ id: x.id, room_id: x.room_id, author: full.me.number, taken_at: x.taken_at }));
       const base: VisitState = { ...full, photos: [...full.photos, ...local] };
       await this.commit(code, pending.reduce(applyOp, base));
-      this.reloadNeeded = false;
+      await this.store.clearReloadNeeded(code);
     });
   }
 
@@ -320,17 +340,20 @@ export class SyncService {
       try {
         await this.api.uploadPhoto(code, { id: p.id, room_id: p.room_id, taken_at: p.taken_at, blob: p.blob });
       } catch (e) {
+        if (generation !== this.generation) return; // session fermée : la photo reste en file
         if (!(e instanceof ApiError) || isTransient(e.status)) throw e;
-        await this.store.ackPhoto(p.id);
         await this.mutate(async () => {
           const current = this.stateSig();
           if (generation !== this.generation || !current) return;
+          await this.store.ackPhoto(p.id);
           await this.commit(code, { ...current, photos: current.photos.filter((x) => x.id !== p.id) });
         });
+        if (generation !== this.generation) return;
         this.noticesSubject.next(`Une photo n'a pas pu être envoyée et a été abandonnée (${e.message})`);
         await this.refreshCounts(code, generation);
         continue;
       }
+      if (generation !== this.generation) return;
       await this.store.ackPhoto(p.id);
       await this.refreshCounts(code, generation);
     }
@@ -338,14 +361,15 @@ export class SyncService {
 
   /** Étape 3 : changements depuis seq, fusion, puis réapplication des opérations en attente. */
   private async pullChanges(code: string, generation: number): Promise<void> {
-    const since = this.stateSig()?.seq ?? 0;
-    const changes = await this.api.changes(code, since);
+    const current = this.stateSig();
+    if (generation !== this.generation || !current) return;
+    const changes = await this.api.changes(code, current.seq);
     await this.mutate(async () => {
-      const current = this.stateSig();
-      if (generation !== this.generation || !current) return;
+      const latest = this.stateSig();
+      if (generation !== this.generation || !latest) return;
       const pending = await this.store.pendingOps(code);
       if (generation !== this.generation) return;
-      await this.commit(code, pending.reduce(applyOp, mergeChanges(current, changes)));
+      await this.commit(code, pending.reduce(applyOp, mergeChanges(latest, changes)));
     });
   }
 

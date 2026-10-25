@@ -4,9 +4,10 @@ import { ApiClient, ApiError } from './api.client';
 import { Op, OpResult, OpsResponse, VisitState } from './api.types';
 import { db } from './db';
 import { LocalStore } from './local-store';
-import { localIsoWithOffset, SyncService } from './sync.service';
+import { localIsoWithOffset, SYNC_TIMERS, SyncService } from './sync.service';
 
 const CODE = 'maison-1';
+const OTHER = 'maison-2';
 
 function baseState(): VisitState {
   return {
@@ -28,8 +29,9 @@ function baseState(): VisitState {
   };
 }
 
-function emptyChanges(seq: number): VisitState {
-  return { ...baseState(), seq, rooms: [], points: [] };
+function emptyChanges(seq: number, code = CODE): VisitState {
+  const base = baseState();
+  return { ...base, seq, visit: { ...base.visit, code }, rooms: [], points: [] };
 }
 
 function deferred<T>() {
@@ -48,7 +50,7 @@ class FakeApi {
   calls: string[] = [];
   sendOps = vi.fn(async (_code: string, ops: Op[]): Promise<OpsResponse> => applied(ops));
   uploadPhoto = vi.fn(async (_code: string, _p: { id: string }): Promise<void> => undefined);
-  changes = vi.fn(async (_code: string, since: number): Promise<VisitState> => emptyChanges(since));
+  changes = vi.fn(async (code: string, since: number): Promise<VisitState> => emptyChanges(since, code));
   state = vi.fn(async (_code: string): Promise<VisitState> => baseState());
 }
 
@@ -148,6 +150,7 @@ describe('SyncService', () => {
     expect(svc.state()?.ratings).toEqual([{ point_id: 'p1', value: 4, updated_at: expect.any(Number) }]);
     expect(svc.status().pendingOps).toBe(1);
     expect((await store.getState(CODE))?.ratings[0].value).toBe(4);
+    await vi.waitFor(() => expect(api.sendOps).toHaveBeenCalledTimes(1));
     const [, ops] = api.sendOps.mock.calls[0];
     d.resolve(applied(ops));
     await svc.whenIdle();
@@ -157,7 +160,7 @@ describe('SyncService', () => {
 
   it('dispatch add_room ajoute un note_point_id et crée le point note localement', async () => {
     await openIdle();
-    impl('ops', async () => ({ seq: 6, results: [] }));
+    impl('ops', () => new Promise(() => undefined)); // envoi en suspens : les opérations restent en file
     await svc.dispatch('add_room', { id: 'r2', name: 'Cave', from_section_id: null });
     const [op] = await store.pendingOps(CODE);
     const noteId = (op.payload as { note_point_id: string }).note_point_id;
@@ -231,18 +234,25 @@ describe('SyncService', () => {
 
   it('rejected : rejected$ et notices$ émettent, state() rechargé, opérations restantes réappliquées', async () => {
     await openIdle();
-    const d = deferred<void>();
-    impl('ops', () => d.promise.then(() => ({ seq: 9, results: [] }))); // rien n'est accepté au départ
+    impl('ops', async () => { throw new ApiError(0, 'hors ligne'); }); // rien n'est accepté au départ
     await svc.dispatch('set_comment', { room_id: 'r1', text: 'refusé' });
+    await svc.whenIdle();
     await svc.dispatch('set_rating', { point_id: 'p1', value: 2 });
+    await svc.whenIdle();
     const [first, second] = await store.pendingOps(CODE);
-    impl('ops', async () => ({
-      seq: 9, results: [{ op_id: first.op_id, result: 'rejected', reason: 'closed' }],
-    }));
+    // 1er lot : seule la première a un résultat (rejet) ; la seconde part au lot suivant
+    impl('ops', async (_c: string, ops: Op[]) => (ops.some((o) => o.op_id === first.op_id)
+      ? { seq: 9, results: [{ op_id: first.op_id, result: 'rejected', reason: 'closed' }] }
+      : applied(ops)));
+    let pendingAtReload: string[] = [];
+    impl('state', async () => {
+      pendingAtReload = (await store.pendingOps(CODE)).map((o) => o.op_id);
+      return server;
+    });
     const server = { ...baseState(), seq: 9, visit: { ...baseState().visit, closed_at: '2026-10-25T11:00:00Z' } };
-    impl('state', async () => server);
     impl('changes', async (_c: string, since: number) => ({ ...emptyChanges(since), visit: server.visit }));
-    d.resolve();
+    api.sendOps.mockClear();
+    svc.kick();
     await svc.whenIdle();
 
     expect(rejected).toEqual([{ op_id: first.op_id, result: 'rejected', reason: 'closed' }]);
@@ -251,8 +261,10 @@ describe('SyncService', () => {
     const s = svc.state()!;
     expect(s.visit.closed_at).toBe('2026-10-25T11:00:00Z');
     expect(s.comments).toEqual([]); // l'op rejetée a disparu de l'affichage
-    expect(s.ratings.map((r) => r.value)).toEqual([2]); // l'op encore en attente est réappliquée
-    expect((await store.pendingOps(CODE)).map((o) => o.op_id)).toEqual([second.op_id]);
+    expect(pendingAtReload).toEqual([second.op_id]); // rechargement avant l'envoi du lot suivant
+    expect(s.ratings.map((r) => r.value)).toEqual([2]); // l'op encore en attente a été réappliquée
+    expect(api.sendOps.mock.calls.map((c) => c[1].map((o) => o.op_id))).toEqual([[first.op_id, second.op_id], [second.op_id]]);
+    expect(await store.pendingOps(CODE)).toEqual([]);
     expect((await store.getState(CODE))?.visit.closed_at).toBe('2026-10-25T11:00:00Z');
     expect(api.changes).toHaveBeenCalledWith(CODE, 9);
   });
@@ -336,13 +348,18 @@ describe('SyncService', () => {
 
   it('une valeur locale en attente n\'est pas écrasée par un changes plus ancien', async () => {
     await openIdle();
-    impl('ops', async () => ({ seq: 6, results: [] })); // le serveur ne répond pas pour l'op : elle reste
-    impl('changes', async () => ({
+    const d = deferred<VisitState>();
+    impl('changes', () => d.promise);
+    svc.kick();
+    await vi.waitFor(() => expect(api.changes).toHaveBeenCalledTimes(1));
+    // pendant que changes est en vol : une modification locale qui ne partira pas tout de suite
+    impl('ops', async () => { throw new ApiError(0, 'hors ligne'); });
+    await svc.dispatch('set_rating', { point_id: 'p1', value: 4 });
+    d.resolve({
       ...emptyChanges(7),
       ratings: [{ point_id: 'p1', value: 2, updated_at: 1 }],
       comments: [{ room_id: 'r1', text: 'du serveur', updated_at: 1 }],
-    }));
-    await svc.dispatch('set_rating', { point_id: 'p1', value: 4 });
+    });
     await svc.whenIdle();
     const s = svc.state()!;
     expect(s.seq).toBe(7);
@@ -350,6 +367,169 @@ describe('SyncService', () => {
     expect(s.comments.map((c) => c.text)).toEqual(['du serveur']);
     expect((await store.getState(CODE))?.ratings[0].value).toBe(4);
     expect(svc.status().pendingOps).toBe(1);
+  });
+
+  it('lot sans résultat : échec passager, ni photos ni changes, nouvel essai', async () => {
+    await openIdle();
+    impl('ops', async () => ({ seq: 6, results: [] }));
+    await svc.dispatch('add_room', { id: 'r2', name: 'Cave', from_section_id: null });
+    await svc.addPhoto('r2', new Blob(['jpeg']));
+    await svc.whenIdle();
+    expect(api.uploadPhoto).not.toHaveBeenCalled();
+    expect(api.changes).not.toHaveBeenCalled();
+    expect(svc.status()).toMatchObject({ pendingOps: 1, pendingPhotos: 1 });
+    expect(svc.status().error).not.toBeNull();
+    impl('ops', async (_c: string, ops: Op[]) => applied(ops));
+    svc.kick();
+    await svc.whenIdle();
+    expect(api.uploadPhoto).toHaveBeenCalledTimes(1);
+    expect(svc.status()).toMatchObject({ pendingOps: 0, pendingPhotos: 0, error: null });
+  });
+
+  it('les délais de nouvel essai plafonnent à 30 s', async () => {
+    await openIdle();
+    impl('ops', async () => { throw new ApiError(0, 'hors ligne'); });
+    await svc.dispatch('set_rating', { point_id: 'p1', value: 3 });
+    await svc.whenIdle();
+    for (const [i, delay] of [1000, 2000, 4000, 8000, 16000, 30000, 30000].entries()) {
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(api.sendOps).toHaveBeenCalledTimes(i + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      await svc.whenIdle();
+      expect(api.sendOps).toHaveBeenCalledTimes(i + 2);
+    }
+  });
+
+  it('le rechargement dû à un rejet survit à une fermeture', async () => {
+    await openIdle();
+    impl('ops', async (_c: string, ops: Op[]) => ({
+      seq: 6, results: ops.map((o) => ({ op_id: o.op_id, result: 'rejected', reason: 'closed' })),
+    }));
+    impl('state', async () => { throw new ApiError(0, 'hors ligne'); });
+    await svc.dispatch('set_comment', { room_id: 'r1', text: 'refusé' });
+    await svc.whenIdle();
+    expect(api.state).toHaveBeenCalledTimes(1);
+    expect(await store.pendingOps(CODE)).toEqual([]);
+    expect((await store.getState(CODE))?.comments).toHaveLength(1); // effet encore affiché
+
+    svc.close();
+    impl('state', async () => ({ ...baseState(), seq: 8 }));
+    await svc.open(CODE);
+    await svc.whenIdle();
+    expect(api.state).toHaveBeenCalledTimes(2);
+    expect(svc.state()!.comments).toEqual([]);
+    expect((await store.getState(CODE))?.comments).toEqual([]);
+    expect(await store.isReloadNeeded(CODE)).toBe(false);
+
+    // une fois rechargé, plus de rechargement aux cycles suivants
+    svc.kick();
+    await svc.whenIdle();
+    expect(api.state).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispatch : si le stockage échoue, rien n\'est affiché ni mis en file et l\'erreur remonte', async () => {
+    await openIdle();
+    const quota = new DOMException('plein', 'QuotaExceededError');
+    vi.spyOn(store, 'enqueueWithState').mockRejectedValueOnce(quota);
+    await expect(svc.dispatch('set_rating', { point_id: 'p1', value: 4 })).rejects.toBe(quota);
+    expect(svc.state()!.ratings).toEqual([]);
+    expect(await store.pendingOps(CODE)).toEqual([]);
+    expect((await store.getState(CODE))?.ratings).toEqual([]);
+    expect(svc.status().pendingOps).toBe(0);
+    // une fusion ultérieure n'y fait pas réapparaître l'entrée fantôme
+    svc.kick();
+    await svc.whenIdle();
+    expect(svc.state()!.ratings).toEqual([]);
+  });
+
+  it('addPhoto : si le stockage échoue, la photo n\'apparaît pas et l\'erreur remonte', async () => {
+    await openIdle();
+    const quota = new DOMException('plein', 'QuotaExceededError');
+    vi.spyOn(store, 'addPhotoWithState').mockRejectedValueOnce(quota);
+    await expect(svc.addPhoto('r1', new Blob(['jpeg']))).rejects.toBe(quota);
+    expect(svc.state()!.photos).toEqual([]);
+    expect(await store.pendingPhotos(CODE)).toEqual([]);
+    expect((await store.getState(CODE))?.photos).toEqual([]);
+  });
+
+  it('un kick juste à la fin d\'un cycle n\'est pas perdu', async () => {
+    await openIdle();
+    const timers = TestBed.inject(SYNC_TIMERS);
+    const original = timers.set.bind(timers);
+    // au moment où le cycle programme sa minuterie (fin de cycle), un kick arrive en microtâche
+    vi.spyOn(timers, 'set').mockImplementationOnce((fn, ms) => {
+      queueMicrotask(() => svc.kick());
+      return original(fn, ms);
+    });
+    svc.kick();
+    await svc.whenIdle();
+    await vi.waitFor(() => expect(api.changes).toHaveBeenCalledTimes(2));
+    await svc.whenIdle();
+  });
+
+  describe('fermeture ou changement de visite pendant un appel', () => {
+    beforeEach(async () => {
+      await store.saveState(OTHER, { ...baseState(), seq: 40, visit: { ...baseState().visit, code: OTHER } });
+    });
+
+    async function expectOtherUntouched() {
+      // laisse l'ancien cycle aller au bout (chaque lecture IndexedDB cède la main)
+      for (let i = 0; i < 20; i++) await store.pendingOps('aucune');
+      await svc.whenIdle();
+      expect(svc.state()!.visit.code).toBe(OTHER);
+      expect(svc.state()!.seq).toBe(40);
+      expect((await store.getState(OTHER))?.seq).toBe(40);
+      expect(rejected).toEqual([]);
+      expect(notices).toEqual([]);
+    }
+
+    it('sendOps en vol : rien n\'est acquitté, aucune émission, aucune étape suivante', async () => {
+      await openIdle();
+      const d = deferred<OpsResponse>();
+      impl('ops', () => d.promise);
+      await svc.dispatch('set_comment', { room_id: 'r1', text: 'x' });
+      await vi.waitFor(() => expect(api.sendOps).toHaveBeenCalledTimes(1));
+      await svc.open(OTHER);
+      const [op] = await store.pendingOps(CODE);
+      d.resolve({ seq: 9, results: [{ op_id: op.op_id, result: 'rejected', reason: 'closed' }] });
+      await d.promise;
+      await expectOtherUntouched();
+      expect((await store.pendingOps(CODE)).map((o) => o.op_id)).toEqual([op.op_id]);
+      expect(await store.isReloadNeeded(CODE)).toBe(false);
+      expect(api.state).not.toHaveBeenCalled();
+      expect(api.changes.mock.calls.map((c) => c[0])).toEqual([OTHER]);
+    });
+
+    it('uploadPhoto en vol : la photo reste en file et dans l\'état enregistré', async () => {
+      await openIdle();
+      const d = deferred<void>();
+      impl('photo', () => d.promise);
+      await svc.addPhoto('r1', new Blob(['jpeg']));
+      await vi.waitFor(() => expect(api.uploadPhoto).toHaveBeenCalledTimes(1));
+      await svc.open(OTHER);
+      d.reject(new ApiError(409, 'la visite est clôturée'));
+      await d.promise.catch(() => undefined);
+      await expectOtherUntouched();
+      expect(await store.pendingPhotos(CODE)).toHaveLength(1);
+      expect((await store.getState(CODE))?.photos).toHaveLength(1);
+      expect(api.changes.mock.calls.map((c) => c[0])).toEqual([OTHER]);
+    });
+
+    it('changes en vol : ni le signal ni les états enregistrés ne sont modifiés', async () => {
+      await openIdle();
+      const d = deferred<VisitState>();
+      impl('changes', (code: string, since: number) => (code === CODE ? d.promise : Promise.resolve(emptyChanges(since, code))));
+      svc.kick();
+      await vi.waitFor(() => expect(api.changes).toHaveBeenCalledTimes(1));
+      await svc.open(OTHER);
+      await svc.whenIdle();
+      d.resolve({ ...emptyChanges(50), comments: [{ room_id: 'r1', text: 'tard', updated_at: 1 }] });
+      await d.promise;
+      await expectOtherUntouched();
+      expect(svc.state()!.comments).toEqual([]);
+      expect((await store.getState(CODE))?.seq).toBe(5);
+      expect(api.changes.mock.calls).toEqual([[CODE, 5], [OTHER, 40]]);
+    });
   });
 
   it('un seul cycle à la fois : des kick pendant un cycle donnent un seul cycle de plus', async () => {

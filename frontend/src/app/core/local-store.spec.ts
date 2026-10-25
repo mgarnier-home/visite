@@ -59,6 +59,42 @@ describe('LocalStore', () => {
     await expect(store.removeVisit('a')).rejects.toBeInstanceOf(PendingDataError);
   });
 
+  it('enqueueWithState met en file et enregistre l\'état, ou rien du tout', async () => {
+    await store.enqueueWithState('a', op('1'), state('a'));
+    expect((await store.pendingOps('a')).map((o) => o.op_id)).toEqual(['1']);
+    expect((await store.getState('a'))?.seq).toBe(1);
+    const unclonable = { ...state('a'), seq: 2, bad: () => 0 } as unknown as VisitState;
+    await expect(store.enqueueWithState('a', op('2'), unclonable)).rejects.toThrow();
+    expect((await store.pendingOps('a')).map((o) => o.op_id)).toEqual(['1']);
+    expect((await store.getState('a'))?.seq).toBe(1);
+  });
+
+  it('addPhotoWithState enregistre la photo et l\'état, ou rien du tout', async () => {
+    const rec = (id: string) => ({ id, code: 'a', room_id: null, taken_at: 't', blob: new Blob(['x']) });
+    await store.addPhotoWithState(rec('p1'), state('a'));
+    expect((await store.pendingPhotos('a')).map((p) => p.id)).toEqual(['p1']);
+    expect(await store.getState('a')).toBeDefined();
+    const unclonable = { ...state('a'), bad: () => 0 } as unknown as VisitState;
+    await expect(store.addPhotoWithState(rec('p2'), unclonable)).rejects.toThrow();
+    expect((await store.pendingPhotos('a')).map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('mémorise par visite qu\'un rechargement complet est dû', async () => {
+    expect(await store.isReloadNeeded('a')).toBe(false);
+    await store.markReloadNeeded('a');
+    expect(await store.isReloadNeeded('a')).toBe(true);
+    expect(await store.isReloadNeeded('b')).toBe(false);
+    await store.clearReloadNeeded('a');
+    expect(await store.isReloadNeeded('a')).toBe(false);
+  });
+
+  it('removeVisit oublie aussi le rechargement dû', async () => {
+    await store.saveState('a', state('a'));
+    await store.markReloadNeeded('a');
+    await store.removeVisit('a');
+    expect(await store.isReloadNeeded('a')).toBe(false);
+  });
+
   it('removeVisit supprime une visite sans données en attente', async () => {
     await store.saveState('a', state('a'));
     await store.removeVisit('a');
