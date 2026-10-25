@@ -1,0 +1,32 @@
+﻿visite;pièce;point;type;réponse partagée;posée;P1;P2;bloquant;travaux €
+maison-test;Fiche;address;fiche;1 rue des Lilas;;;;;
+maison-test;Fiche;price_eur;fiche;250000;;;;;
+maison-test;Fiche;living_area_m2;fiche;120;;;;;
+maison-test;Fiche;floor_area_m2;fiche;;;;;;
+maison-test;Fiche;land_area_m2;fiche;;;;;;
+maison-test;Fiche;visit_at;fiche;2026-10-25T10:00:00Z;;;;;
+maison-test;Fiche;agent_name;fiche;Mme Martin;;;;;
+maison-test;Fiche;agent_phone;fiche;;;;;;
+maison-test;Fiche;agent_email;fiche;;;;;;
+maison-test;Fiche;construction_year;fiche;1990;;;;;
+maison-test;Fiche;dpe_energy;fiche;;;;;;
+maison-test;Fiche;dpe_ges;fiche;;;;;;
+maison-test;Fiche;rooms_count;fiche;;;;;;
+maison-test;Fiche;bedrooms_count;fiche;3;;;;;
+maison-test;Fiche;listing_url;fiche;;;;;;
+maison-test;Fiche;heating_type;fiche;;;;;;
+maison-test;Fiche;prix_m2;fiche;2083,33;;;;;
+maison-test;Fiche;frais_notaire;fiche;18750;;;;;
+maison-test;Fiche;age_batiment;fiche;36;;;;;
+maison-test;Salon;surface_m2;surface;22,5;;;;;
+maison-test;Salon;Luminosité;note;;;4;N/A;;
+maison-test;Salon;Fenêtres;case;problem;;;;oui;1500
+maison-test;Salon;Sol;constat;parquet;;;;;
+maison-test;Salon;Charges ?;question;120 €/mois;oui;;;;
+maison-test;Salon;;commentaire;;;RAS;"a;b";;
+maison-test;Bilan;Quartier;note;2;;4;5;;
+maison-test;Bilan;Calme;note;1;;5;;;
+maison-test;Bilan;;commentaire;;;;ok;;
+maison-test;Bilan;;score pondéré;;;4,3;5;;
+maison-test;Bilan;;total travaux;1500;;;;;
+maison-test;Bilan;;prix réel;270250;;;;;
