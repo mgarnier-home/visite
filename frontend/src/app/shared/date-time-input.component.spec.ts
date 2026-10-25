@@ -1,6 +1,8 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { MatDatepickerInputHarness } from '@angular/material/datepicker/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideAppIcons } from './icons';
 import { DateTimeInputComponent } from './date-time-input.component';
@@ -56,6 +58,28 @@ describe('DateTimeInputComponent', () => {
     const last = emitted[emitted.length - 1]!;
     const { date, time } = splitDateTime(last);
     expect([date?.getDate(), date?.getMonth(), date?.getFullYear()]).toEqual([25, 9, 2026]);
+    expect(time).toBe('14:30');
+  });
+
+  it('heure validée par un `change` (sans blur) : émise', async () => {
+    const { typeDate, timeInput, fixture, emitted } = await setup();
+    await typeDate('25/10/2026');
+    timeInput.value = '0905';
+    timeInput.dispatchEvent(new Event('input'));
+    timeInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(splitDateTime(emitted[emitted.length - 1]!).time).toBe('09:05');
+  });
+
+  it('calendrier : choisir un jour dans la fenêtre émet cette date', async () => {
+    const { fixture, emitted } = await setup('2026-10-25T14:30:00+01:00');
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    const input = await loader.getHarness(MatDatepickerInputHarness);
+    await input.openCalendar();
+    const calendar = await input.getCalendar();
+    await calendar.selectCell({ text: '12' });
+    const { date, time } = splitDateTime(emitted[emitted.length - 1]!);
+    expect([date?.getDate(), date?.getMonth(), date?.getFullYear()]).toEqual([12, 9, 2026]);
     expect(time).toBe('14:30');
   });
 

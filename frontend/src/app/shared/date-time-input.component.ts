@@ -65,6 +65,8 @@ const timeValidator = (c: AbstractControl): ValidationErrors | null =>
           autocomplete="off"
           [formControl]="timeCtrl"
           (input)="onTimeInput($event)"
+          (change)="emit()"
+          (keydown.enter)="emit()"
           (blur)="onTimeBlur()"
         />
         @if (timeCtrl.hasError('time')) {
