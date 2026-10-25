@@ -234,7 +234,7 @@ describe('TemplatePage', () => {
 
     it('supprimer le point débloque « Enregistrer »', async () => {
       await withInvalidWeight();
-      await click(q('point-remove'));
+      await click(all('point-remove')[1]);
       expect(q<HTMLButtonElement>('save').disabled).toBe(false);
     });
 
