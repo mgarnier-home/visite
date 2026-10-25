@@ -37,7 +37,7 @@
 
       <nav mat-tab-nav-bar [tabPanel]="panel">
         @for (t of tabs; track t.path) {
-          <a mat-tab-link [routerLink]="['/v', code, t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive">
+          <a mat-tab-link [routerLink]="['/v', code(), t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive">
             {{ t.label }}
           </a>
         }

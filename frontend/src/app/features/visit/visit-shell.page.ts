@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnDestroy, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,17 +26,20 @@ type Phase = 'loading' | 'ready' | 'network' | 'notfound' | 'error';
   templateUrl: './visit-shell.page.html',
   styleUrl: './visit-shell.page.scss',
 })
-export class VisitShellPage implements OnInit, OnDestroy {
+export class VisitShellPage implements OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly store = inject(LocalStore);
   private readonly sync = inject(SyncService);
   private readonly snack = inject(MatSnackBar);
-  protected readonly code = inject(ActivatedRoute).snapshot.paramMap.get('code') ?? '';
+  private readonly route = inject(ActivatedRoute);
+  protected readonly code = signal('');
 
   protected readonly phase = signal<Phase>('loading');
   private destroyed = false;
+  /** Jeton de la dernière ouverture : le résultat d'un code précédent est ignoré. */
+  private token = 0;
 
-  protected readonly title = computed(() => this.sync.state()?.visit.fiche.address.trim() || this.code);
+  protected readonly title = computed(() => this.sync.state()?.visit.fiche.address.trim() || this.code());
   protected readonly closed = computed(() => !!this.sync.state()?.visit.closed_at);
   protected readonly tabs = [
     { path: 'rooms', label: 'Pièces' },
@@ -49,20 +52,30 @@ export class VisitShellPage implements OnInit, OnDestroy {
     this.sync.notices$
       .pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe((message) => this.snack.open(message, 'OK', { duration: 5000 }));
+    // le composant est réutilisé quand seul le code change (/v/a -> /v/b)
+    this.route.paramMap.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((params) => {
+      void this.openVisit(params.get('code') ?? '');
+    });
   }
 
-  async ngOnInit(): Promise<void> {
+  private async openVisit(code: string): Promise<void> {
+    const token = ++this.token;
+    const stale = () => this.destroyed || token !== this.token;
+    this.code.set(code);
+    this.phase.set('loading');
     try {
-      if (!(await this.store.getState(this.code))) {
+      if (!(await this.store.getState(code))) {
         // première ouverture sur cet appareil : rejoindre et récupérer l'état (réseau requis)
-        await this.api.join(this.code);
-        await this.store.saveState(this.code, await this.api.state(this.code));
+        await this.api.join(code);
+        const full = await this.api.state(code);
+        if (stale()) return;
+        await this.store.saveState(code, full);
       }
-      if (this.destroyed) return;
-      await this.sync.open(this.code);
-      if (!this.destroyed) this.phase.set('ready');
+      if (stale()) return;
+      await this.sync.open(code);
+      if (!stale()) this.phase.set('ready');
     } catch (e) {
-      if (this.destroyed) return;
+      if (stale()) return;
       if (e instanceof ApiError && e.status === 0) this.phase.set('network');
       else if (e instanceof ApiError && e.status === 404) this.phase.set('notfound');
       else this.phase.set('error');

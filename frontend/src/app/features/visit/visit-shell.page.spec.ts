@@ -1,8 +1,8 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, ParamMap, provideRouter } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { VisitState } from '../../core/api.types';
@@ -22,10 +22,12 @@ describe('VisitShellPage', () => {
   const api = { join: vi.fn(), state: vi.fn() };
   const store = { getState: vi.fn(), saveState: vi.fn() };
   const snack = { open: vi.fn() };
+  let params: BehaviorSubject<ParamMap>;
 
   beforeEach(() => {
     vi.resetAllMocks();
     notices = new Subject<string>();
+    params = new BehaviorSubject(convertToParamMap({ code: 'maison-x' }));
     sync.notices$ = notices.asObservable();
     state.set(stateOf('12 rue des Lilas'));
     status.set({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
@@ -39,7 +41,7 @@ describe('VisitShellPage', () => {
         { provide: LocalStore, useValue: store },
         { provide: MatSnackBar, useValue: snack },
         provideRouter([]),
-        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ code: 'maison-x' }) } } },
+        { provide: ActivatedRoute, useValue: { paramMap: params } },
         provideAppIcons(),
       ],
     });
@@ -114,6 +116,31 @@ describe('VisitShellPage', () => {
     state.set(stateOf('x', true));
     const { el } = await setup();
     expect(text(el, '[data-test=closed-banner]')).toContain('Visite clôturée');
+  });
+
+  it('rouvre la visite quand le code change et ignore le résultat périmé de l\'ancien code', async () => {
+    store.getState.mockResolvedValue(undefined);
+    let resolveA!: (v: { number: number }) => void;
+    api.join.mockImplementation((c: string) =>
+      c === 'a' ? new Promise((r) => (resolveA = r)) : Promise.resolve({ number: 2 }),
+    );
+    api.state.mockResolvedValue(stateOf('b'));
+    params.next(convertToParamMap({ code: 'a' }));
+    const fixture = TestBed.createComponent(VisitShellPage);
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r));
+    params.next(convertToParamMap({ code: 'b' }));
+    await new Promise((r) => setTimeout(r));
+    resolveA({ number: 1 });
+    await new Promise((r) => setTimeout(r));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(sync.open).toHaveBeenCalledTimes(1);
+    expect(sync.open).toHaveBeenCalledWith('b');
+    expect(store.saveState).toHaveBeenCalledTimes(1);
+    expect(store.saveState.mock.calls[0][0]).toBe('b');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('a[mat-tab-link]')?.getAttribute('href')).toBe('/v/b/rooms');
   });
 
   describe('indicateur de synchronisation', () => {
