@@ -132,11 +132,14 @@ type Photo struct {
 	TakenAt string  `json:"taken_at"`
 }
 
+// Me : identité de l'appareil dans la visite.
+type Me struct {
+	Number int `json:"number"`
+}
+
 type VisitState struct {
-	Seq int64 `json:"seq"`
-	Me  struct {
-		Number int `json:"number"`
-	} `json:"me"`
+	Seq       int64         `json:"seq"`
+	Me        Me            `json:"me"`
 	Visit     VisitInfo     `json:"visit"`
 	Rooms     []Room        `json:"rooms"`
 	Points    []Point       `json:"points"`
