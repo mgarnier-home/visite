@@ -61,9 +61,13 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           BUILD_DATE: ${{ needs.version.outputs.date }}
           COMMIT: ${{ github.sha }}
+        # Le tag « <version>-<arch> » est propre à cette publication : la fusion part de lui, si
+        # bien qu'un autre tag publié en même temps (qui réécrit « <arch> ») ne peut pas glisser
+        # son image dans cette version.
         run: |
           docker buildx build \
             --tag "mgarnier11/visite:$ARCH" \
+            --tag "mgarnier11/visite:$VERSION-$ARCH" \
             --build-arg "VERSION=v$VERSION" \
             --build-arg "COMMIT=$COMMIT" \
             --build-arg "DATE=$BUILD_DATE" \
@@ -84,5 +88,5 @@ jobs:
           docker buildx imagetools create \
             --tag "mgarnier11/visite:$VERSION" \
             --tag mgarnier11/visite:latest \
-            mgarnier11/visite:amd64 \
-            mgarnier11/visite:arm64
+            "mgarnier11/visite:$VERSION-amd64" \
+            "mgarnier11/visite:$VERSION-arm64"
