@@ -48,3 +48,6 @@ tasks:
     cmds:
       - task: build
       - cd frontend && npx playwright test
+  docker:build:
+    cmds:
+      - docker --context default buildx build --builder default --platform linux/amd64 --load -t visite:dev .

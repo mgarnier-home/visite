@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.angular
+bin
+data
+.git
+.superpowers
+**/test-results
+**/playwright-report
