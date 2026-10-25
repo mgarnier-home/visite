@@ -70,7 +70,10 @@ func TestSaveTemplateIncrementsVersion(t *testing.T) {
 	if saved.Version != 1 {
 		t.Fatalf("version = %d, attendu 1", saved.Version)
 	}
-	got, _ := s.GetTemplate(ctx)
+	got, gerr := s.GetTemplate(ctx)
+	if gerr != nil {
+		t.Fatal(gerr)
+	}
 	if got.Version != 1 || got.PackingList != "mètre, lampe" {
 		t.Fatalf("relu: %+v", got)
 	}
@@ -108,7 +111,10 @@ func TestSaveTemplateKeepsOrder(t *testing.T) {
 	if _, err := s.SaveTemplate(ctx, sampleTemplate()); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetTemplate(ctx)
+	got, gerr := s.GetTemplate(ctx)
+	if gerr != nil {
+		t.Fatal(gerr)
+	}
 	if got.Sections[0].ID != "s1" || got.Sections[1].ID != "s2" {
 		t.Fatalf("sections non triées: %+v", got.Sections)
 	}
@@ -130,7 +136,10 @@ func TestGetTemplateListsNeverNil(t *testing.T) {
 	if _, err := s.SaveTemplate(ctx, sampleTemplate()); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetTemplate(ctx)
+	got, gerr := s.GetTemplate(ctx)
+	if gerr != nil {
+		t.Fatal(gerr)
+	}
 	entree := got.Sections[0]
 	if entree.Points == nil || entree.Questions == nil {
 		t.Fatalf("listes nil: %+v", entree)
@@ -146,7 +155,10 @@ func TestSeedTemplateIfEmpty(t *testing.T) {
 	if err := s.SeedTemplateIfEmpty(ctx, sampleTemplate()); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetTemplate(ctx)
+	got, gerr := s.GetTemplate(ctx)
+	if gerr != nil {
+		t.Fatal(gerr)
+	}
 	if got.Version != 1 || len(got.Sections) != 2 {
 		t.Fatalf("seed: %+v", got)
 	}
@@ -155,7 +167,10 @@ func TestSeedTemplateIfEmpty(t *testing.T) {
 	if err := s.SeedTemplateIfEmpty(ctx, other); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetTemplate(ctx)
+	got, gerr = s.GetTemplate(ctx)
+	if gerr != nil {
+		t.Fatal(gerr)
+	}
 	if got.Version != 1 || len(got.Sections) != 2 {
 		t.Fatalf("le seed ne doit pas écraser: %+v", got)
 	}

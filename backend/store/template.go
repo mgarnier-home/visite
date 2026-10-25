@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -10,14 +11,29 @@ import (
 
 // GetTemplate renvoie le modèle global ; les listes ne sont jamais nil.
 func (s *Store) GetTemplate(ctx context.Context) (model.Template, error) {
+	// Transaction de lecture : snapshot WAL cohérent pour les quatre requêtes.
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return model.Template{}, err
+	}
+	defer tx.Rollback()
+	return readTemplate(ctx, tx)
+}
+
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func readTemplate(ctx context.Context, q querier) (model.Template, error) {
 	t := model.Template{Sections: []model.TemplateSection{}}
-	if err := s.db.QueryRowContext(ctx, `SELECT version, packing_list FROM template WHERE id = 1`).
+	if err := q.QueryRowContext(ctx, `SELECT version, packing_list FROM template WHERE id = 1`).
 		Scan(&t.Version, &t.PackingList); err != nil {
 		return t, err
 	}
 	idx := map[string]int{}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, kind, position FROM template_sections ORDER BY position, id`)
+	rows, err := q.QueryContext(ctx, `SELECT id, name, kind, position FROM template_sections ORDER BY position, id`)
 	if err != nil {
 		return t, err
 	}
@@ -34,7 +50,7 @@ func (s *Store) GetTemplate(ctx context.Context) (model.Template, error) {
 		return t, err
 	}
 
-	rows, err = s.db.QueryContext(ctx,
+	rows, err = q.QueryContext(ctx,
 		`SELECT id, section_id, label, type, options, weight, position FROM template_points ORDER BY position, id`)
 	if err != nil {
 		return t, err
@@ -54,27 +70,35 @@ func (s *Store) GetTemplate(ctx context.Context) (model.Template, error) {
 		if p.Options == nil {
 			p.Options = []string{}
 		}
-		i := idx[sectionID]
+		i, ok := idx[sectionID]
+		if !ok {
+			rows.Close()
+			return t, fmt.Errorf("point %s: section %s introuvable", p.ID, sectionID)
+		}
 		t.Sections[i].Points = append(t.Sections[i].Points, p)
 	}
 	if err := closeRows(rows); err != nil {
 		return t, err
 	}
 
-	rows, err = s.db.QueryContext(ctx,
+	rows, err = q.QueryContext(ctx,
 		`SELECT id, section_id, text, position FROM template_questions ORDER BY position, id`)
 	if err != nil {
 		return t, err
 	}
 	for rows.Next() {
-		var q model.TemplateQuestion
+		var tq model.TemplateQuestion
 		var sectionID string
-		if err := rows.Scan(&q.ID, &sectionID, &q.Text, &q.Position); err != nil {
+		if err := rows.Scan(&tq.ID, &sectionID, &tq.Text, &tq.Position); err != nil {
 			rows.Close()
 			return t, err
 		}
-		i := idx[sectionID]
-		t.Sections[i].Questions = append(t.Sections[i].Questions, q)
+		i, ok := idx[sectionID]
+		if !ok {
+			rows.Close()
+			return t, fmt.Errorf("question %s: section %s introuvable", tq.ID, sectionID)
+		}
+		t.Sections[i].Questions = append(t.Sections[i].Questions, tq)
 	}
 	return t, closeRows(rows)
 }
@@ -112,7 +136,11 @@ func (s *Store) SaveTemplate(ctx context.Context, t model.Template) (model.Templ
 	if err != nil {
 		return model.Template{}, err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return model.Template{}, err
+	}
+	if n == 0 {
 		return model.Template{}, ErrVersionConflict
 	}
 	for _, table := range []string{"template_questions", "template_points", "template_sections"} {
@@ -131,7 +159,10 @@ func (s *Store) SaveTemplate(ctx context.Context, t model.Template) (model.Templ
 			if opts == nil {
 				opts = []string{}
 			}
-			ob, _ := json.Marshal(opts)
+			ob, err := json.Marshal(opts)
+			if err != nil {
+				return model.Template{}, err
+			}
 			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO template_points (id, section_id, label, type, options, weight, position)
 				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -147,10 +178,15 @@ func (s *Store) SaveTemplate(ctx context.Context, t model.Template) (model.Templ
 			}
 		}
 	}
+	// Relecture dans la même transaction : on renvoie ce qui vient d'être écrit.
+	saved, err := readTemplate(ctx, tx)
+	if err != nil {
+		return model.Template{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return model.Template{}, err
 	}
-	return s.GetTemplate(ctx)
+	return saved, nil
 }
 
 // SeedTemplateIfEmpty installe t comme modèle initial s'il n'existe aucune section.
