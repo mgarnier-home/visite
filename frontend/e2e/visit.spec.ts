@@ -35,11 +35,16 @@ async function startVisit(browser: Browser, code: string): Promise<Participants>
   return { contextA, contextB, a, b };
 }
 
-async function createVisit(page: Page, code: string): Promise<void> {
+async function createVisit(page: Page, code: string, excludedRooms: string[] = []): Promise<void> {
   await page.goto('/new');
   await page.locator('[data-test=code]').fill(code);
   await expect(page.getByText('Code disponible')).toBeVisible();
   await page.locator('[data-test=address]').fill(`12 rue des Tests (${code})`);
+  // les cases des pièces apparaissent une fois le modèle chargé, toutes cochées
+  await expect(page.locator('[data-test=room-option]').first()).toBeVisible();
+  for (const name of excludedRooms) {
+    await page.getByRole('checkbox', { name, exact: true }).uncheck();
+  }
   await page.locator('[data-test=submit]').click();
   await expect(page).toHaveURL(new RegExp(`/v/${code}/rooms$`));
 }
@@ -203,6 +208,25 @@ test.describe('visite à deux participants', () => {
     };
     await expect.poll(files).toHaveLength(1);
     expect(files()[0]).toMatch(/^\d{8}-\d{6}-[0-9a-f]{8}\.jpg$/);
+  });
+
+  test('rooms can be excluded at creation', async ({ browser }) => {
+    const contextA = await browser.newContext();
+    const contextB = await browser.newContext();
+    p = { contextA, contextB, a: await contextA.newPage(), b: await contextB.newPage() };
+    const { a } = p;
+    await createVisit(a, uniqueCode(), ['Garage']);
+
+    const rooms = a.locator('[data-test=room]');
+    await expect(rooms.filter({ hasText: 'Cuisine' })).toBeVisible();
+    await expect(rooms.filter({ hasText: 'Garage' })).toHaveCount(0);
+    const other = rooms.filter({ hasText: 'Autres questions' });
+    await expect(other.locator('[data-test=progress]')).toHaveText('0 / 3 posées');
+    const general = rooms.filter({ hasText: 'Questions générales' });
+    await expect(general.locator('[data-test=progress]')).toHaveText('0 / 18 posées');
+
+    await openRoom(a, 'Autres questions');
+    await expect(question(a, 'Garage : La fibre est-elle raccordée ?')).toBeVisible();
   });
 
   test('closed visit is read-only', async ({ browser }) => {
