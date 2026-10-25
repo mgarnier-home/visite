@@ -1,0 +1,49 @@
+<main class="home">
+  <h1>Visite</h1>
+
+  <form class="join" (submit)="$event.preventDefault(); join()">
+    <mat-form-field appearance="outline" class="code-field">
+      <mat-label>Code de la visite</mat-label>
+      <input
+        matInput
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        enterkeyhint="go"
+        [value]="code()"
+        (input)="onCodeInput($event)"
+      />
+    </mat-form-field>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+    <button mat-flat-button type="submit" class="big" data-test="join" [disabled]="!canJoin()">
+      Rejoindre
+    </button>
+  </form>
+
+  <a mat-stroked-button class="big" routerLink="/new">Créer une visite</a>
+
+  @if (visits().length > 0) {
+    <h2>Mes visites</h2>
+    <ul class="visits">
+      @for (v of visits(); track v.code) {
+        <li>
+          <a class="visit" [routerLink]="['/v', v.code]">
+            <span class="address">{{ v.state.visit.fiche.address }}</span>
+            <span class="date">
+              @if (v.state.visit.fiche.visit_at) {
+                {{ v.state.visit.fiche.visit_at | date: 'EEEE d MMMM y, HH:mm' : undefined : 'fr' }}
+              } @else {
+                {{ v.code }}
+              }
+            </span>
+          </a>
+          <button mat-button type="button" data-test="remove" (click)="remove(v.code)">Retirer</button>
+        </li>
+      }
+    </ul>
+  }
+
+  <a mat-button class="template-link" routerLink="/template">Modèle</a>
+</main>

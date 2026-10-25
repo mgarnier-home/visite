@@ -1,0 +1,155 @@
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { Subject, catchError, debounceTime, from, map, of, switchMap } from 'rxjs';
+import { ApiClient, ApiError } from '../../core/api.client';
+import { Fiche } from '../../core/api.types';
+import { CODE_RE, normalizeCode } from '../../core/code';
+import { LocalStore } from '../../core/local-store';
+import { localIsoWithOffset } from '../../core/sync.service';
+import { normalizeCodeWhileTyping } from '../code-typing';
+
+type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
+
+const numberControl = () => new FormControl<number | null>(null);
+const textControl = () => new FormControl<string>('', { nonNullable: true });
+
+/** Classes énergétiques du DPE ; `null` = non renseigné. */
+export const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+
+@Component({
+  selector: 'app-create-page',
+  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  templateUrl: './create.page.html',
+  styleUrl: './create.page.scss',
+})
+export class CreatePage {
+  private readonly api = inject(ApiClient);
+  private readonly store = inject(LocalStore);
+  private readonly router = inject(Router);
+
+  protected readonly dpeClasses = DPE_CLASSES;
+  protected readonly code = signal('');
+  protected readonly codeStatus = signal<CodeStatus>('idle');
+  protected readonly address = signal('');
+  protected readonly busy = signal(false);
+  protected readonly error = signal('');
+
+  protected readonly form = {
+    address: new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }),
+    price_eur: numberControl(),
+    living_area_m2: numberControl(),
+    floor_area_m2: numberControl(),
+    land_area_m2: numberControl(),
+    visit_at: textControl(),
+    agent_name: textControl(),
+    agent_phone: textControl(),
+    agent_email: textControl(),
+    construction_year: numberControl(),
+    dpe_energy: new FormControl<string | null>(null),
+    dpe_ges: new FormControl<string | null>(null),
+    rooms_count: numberControl(),
+    bedrooms_count: numberControl(),
+    listing_url: textControl(),
+    heating_type: textControl(),
+  };
+
+  private readonly codeInput$ = new Subject<string>();
+
+  constructor() {
+    this.form.address.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((v) => this.address.set(v));
+    this.codeInput$
+      .pipe(
+        debounceTime(300),
+        switchMap((typed) => {
+          const code = normalizeCode(typed);
+          if (!CODE_RE.test(code)) return of<CodeStatus>('idle');
+          return from(this.api.exists(code)).pipe(
+            map((r): CodeStatus => (r.exists ? 'taken' : 'free')),
+            catchError(() => of<CodeStatus>('error')),
+          );
+        }),
+        takeUntilDestroyed(inject(DestroyRef)),
+      )
+      .subscribe((status) => this.codeStatus.set(status));
+  }
+
+  protected onCodeInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const typed = normalizeCodeWhileTyping(input.value);
+    input.value = typed;
+    this.code.set(typed);
+    this.error.set('');
+    this.codeStatus.set(CODE_RE.test(normalizeCode(typed)) ? 'pending' : 'idle');
+    this.codeInput$.next(typed);
+  }
+
+  protected codeValid(): boolean {
+    return CODE_RE.test(normalizeCode(this.code()));
+  }
+
+  protected canSubmit(): boolean {
+    return (
+      !this.busy() &&
+      this.address().trim() !== '' &&
+      this.codeValid() &&
+      this.codeStatus() === 'free'
+    );
+  }
+
+  private text(v: string): string | null {
+    const t = v.trim();
+    return t === '' ? null : t;
+  }
+
+  private buildFiche(): Fiche {
+    const f = this.form;
+    const visitAt = f.visit_at.value ? new Date(f.visit_at.value) : null;
+    return {
+      address: f.address.value.trim(),
+      price_eur: f.price_eur.value,
+      living_area_m2: f.living_area_m2.value,
+      floor_area_m2: f.floor_area_m2.value,
+      land_area_m2: f.land_area_m2.value,
+      visit_at: visitAt && !Number.isNaN(visitAt.getTime()) ? localIsoWithOffset(visitAt) : null,
+      agent_name: this.text(f.agent_name.value),
+      agent_phone: this.text(f.agent_phone.value),
+      agent_email: this.text(f.agent_email.value),
+      construction_year: f.construction_year.value,
+      dpe_energy: f.dpe_energy.value,
+      dpe_ges: f.dpe_ges.value,
+      rooms_count: f.rooms_count.value,
+      bedrooms_count: f.bedrooms_count.value,
+      listing_url: this.text(f.listing_url.value),
+      heating_type: this.text(f.heating_type.value),
+    };
+  }
+
+  protected async submit(): Promise<void> {
+    if (!this.canSubmit()) return;
+    const code = normalizeCode(this.code());
+    this.busy.set(true);
+    this.error.set('');
+    try {
+      const state = await this.api.create({ code, fiche: this.buildFiche() });
+      await this.store.saveState(code, state);
+      await this.router.navigate(['/v', code]);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        this.codeStatus.set('taken');
+        this.error.set('Ce code est déjà pris');
+      } else if (e instanceof ApiError && e.status === 0) {
+        this.error.set('Il faut du réseau pour créer une visite');
+      } else {
+        this.error.set('Impossible de créer la visite pour l\'instant');
+      }
+    } finally {
+      this.busy.set(false);
+    }
+  }
+}

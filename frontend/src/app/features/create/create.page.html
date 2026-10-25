@@ -1,0 +1,129 @@
+<main class="create">
+  <a mat-button routerLink="/" class="back">Retour</a>
+  <h1>Créer une visite</h1>
+
+  <form (submit)="$event.preventDefault(); submit()">
+    <mat-form-field appearance="outline">
+      <mat-label>Code de la visite</mat-label>
+      <input
+        matInput
+        data-test="code"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        [value]="code()"
+        (input)="onCodeInput($event)"
+      />
+      <mat-hint>Lettres minuscules, chiffres et tirets (3 à 60 caractères)</mat-hint>
+    </mat-form-field>
+    @switch (codeStatus()) {
+      @case ('pending') {
+        <p class="status">Vérification du code…</p>
+      }
+      @case ('free') {
+        <p class="status ok">Code disponible</p>
+      }
+      @case ('taken') {
+        <p class="status ko">Code déjà pris</p>
+      }
+      @case ('error') {
+        <p class="status ko">Vérification impossible pour l'instant</p>
+      }
+      @default {
+        @if (code() && !codeValid()) {
+          <p class="status ko">Code invalide</p>
+        }
+      }
+    }
+
+    <mat-form-field appearance="outline">
+      <mat-label>Adresse</mat-label>
+      <input matInput data-test="address" required autocomplete="street-address" [formControl]="form.address" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Prix (€)</mat-label>
+      <input matInput data-test="price" type="number" inputmode="numeric" min="0" [formControl]="form.price_eur" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Date et heure de la visite</mat-label>
+      <input matInput data-test="visit-at" type="datetime-local" [formControl]="form.visit_at" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Surface habitable (m²)</mat-label>
+      <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.living_area_m2" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Surface au sol (m²)</mat-label>
+      <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.floor_area_m2" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Terrain (m²)</mat-label>
+      <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.land_area_m2" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre de pièces</mat-label>
+      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.rooms_count" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre de chambres</mat-label>
+      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.bedrooms_count" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Année de construction</mat-label>
+      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.construction_year" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>DPE énergie</mat-label>
+      <mat-select [formControl]="form.dpe_energy">
+        <mat-option [value]="null">—</mat-option>
+        @for (c of dpeClasses; track c) {
+          <mat-option [value]="c">{{ c }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>DPE GES</mat-label>
+      <mat-select [formControl]="form.dpe_ges">
+        <mat-option [value]="null">—</mat-option>
+        @for (c of dpeClasses; track c) {
+          <mat-option [value]="c">{{ c }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Type de chauffage</mat-label>
+      <input matInput [formControl]="form.heating_type" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Annonce (lien)</mat-label>
+      <input matInput type="url" inputmode="url" autocapitalize="none" [formControl]="form.listing_url" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Nom de l'agent</mat-label>
+      <input matInput autocomplete="off" [formControl]="form.agent_name" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Téléphone de l'agent</mat-label>
+      <input matInput type="tel" autocomplete="off" [formControl]="form.agent_phone" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>E-mail de l'agent</mat-label>
+      <input matInput type="email" autocomplete="off" autocapitalize="none" [formControl]="form.agent_email" />
+    </mat-form-field>
+
+    @if (error()) {
+      <p class="status ko" role="alert">{{ error() }}</p>
+    }
+    <button mat-flat-button type="submit" class="submit" data-test="submit" [disabled]="!canSubmit()">
+      Créer la visite
+    </button>
+  </form>
+</main>
