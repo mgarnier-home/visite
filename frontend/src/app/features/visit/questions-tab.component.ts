@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
 
 /** Questions des pièces visibles, groupées par pièce. */
@@ -58,6 +59,7 @@ export class QuestionsTabComponent {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => void this.flush());
+    onPageHidden(() => void this.flush());
   }
 
   /** Brouillon s'il existe (la synchro ne l'écrase pas), sinon la réponse de l'état. */
@@ -92,12 +94,12 @@ export class QuestionsTabComponent {
     }
   }
 
-  /** Enregistre le brouillon s'il diffère de l'état, puis l'efface. */
+  /** Enregistre le brouillon s'il diffère de l'état, puis l'efface ; gardé si l'enregistrement échoue. */
   private async flushOne(id: string): Promise<void> {
     const text = this.drafts()[id];
     if (text === undefined) return;
     const current = this.state()?.shared.find((v) => v.target_id === id && v.field === 'answer')?.value;
-    if (text !== (typeof current === 'string' ? current : '')) await this.setShared(id, 'answer', text);
+    if (text !== (typeof current === 'string' ? current : '') && !(await this.setShared(id, 'answer', text))) return;
     if (this.drafts()[id] === text) {
       this.drafts.update((d) => {
         const { [id]: _removed, ...rest } = d;

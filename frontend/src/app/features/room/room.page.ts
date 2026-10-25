@@ -11,6 +11,7 @@ import { ApiClient } from '../../core/api.client';
 import { OpType, SharedField } from '../../core/api.types';
 import { getDeviceId } from '../../core/device-id';
 import { LocalStore } from '../../core/local-store';
+import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
 import { PhotoButtonComponent, photoErrorMessage } from '../../shared/photo-button.component';
 import { AddPointDialog } from './add-point.dialog';
@@ -155,6 +156,7 @@ export class RoomPage {
       this.roomId();
       untracked(() => void this.flush());
     });
+    onPageHidden(() => void this.flush());
     inject(DestroyRef).onDestroy(() => {
       void this.flush();
       this.destroyed = true;
@@ -254,7 +256,10 @@ export class RoomPage {
     });
   }
 
-  /** Enregistre un brouillon (avec l'identifiant de SA pièce) s'il diffère de l'état, puis l'efface. */
+  /**
+   * Enregistre un brouillon (avec l'identifiant de SA pièce) s'il diffère de l'état, puis l'efface ;
+   * gardé à l'écran si l'enregistrement échoue.
+   */
   private async flushKey(key: string): Promise<void> {
     const text = this.drafts()[key];
     if (text === undefined) return;
@@ -262,22 +267,23 @@ export class RoomPage {
     const kind = key.slice(0, sep);
     const id = key.slice(sep + 1);
     const s = this.state();
+    let saved = true;
     if (kind === 'answer') {
       const current = s?.shared.find((v) => v.target_id === id && v.field === 'answer')?.value;
-      if (text !== (typeof current === 'string' ? current : '')) await this.setShared(id, 'answer', text);
+      if (text !== (typeof current === 'string' ? current : '')) saved = await this.setShared(id, 'answer', text);
     } else if (kind === 'comment') {
       const current = s?.comments.find((c) => c.room_id === id)?.text ?? '';
-      if (text !== current) await this.run('set_comment', { room_id: id, text });
+      if (text !== current) saved = await this.run('set_comment', { room_id: id, text });
     } else if (kind === 'area') {
       const raw = text.trim();
       const value = raw === '' ? null : Number(raw);
       const current = s?.shared.find((v) => v.target_id === id && v.field === 'area_m2')?.value;
       const currentNum = typeof current === 'number' ? current : null;
       if ((value === null || (Number.isFinite(value) && value >= 0)) && value !== currentNum) {
-        await this.setShared(id, 'area_m2', value);
+        saved = await this.setShared(id, 'area_m2', value);
       }
     }
-    if (this.drafts()[key] === text) this.dropDraft(key);
+    if (saved && this.drafts()[key] === text) this.dropDraft(key);
   }
 
   /** Enregistre tous les brouillons (changement de pièce, masquage, destruction). */

@@ -98,6 +98,44 @@ describe('QuestionsTabComponent', () => {
     expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q2', field: 'answer', value: 'Électrique' });
   });
 
+  it('échec d\'enregistrement de la réponse : le brouillon est gardé, renvoyé au blur suivant', async () => {
+    sync.dispatch.mockRejectedValueOnce(new Error('quota'));
+    const { fixture, el } = setup();
+    const answer = el.querySelectorAll<HTMLTextAreaElement>('[data-test=answer]')[1]; // q2, « Gaz »
+    answer.value = 'Électrique';
+    answer.dispatchEvent(new Event('input'));
+    fixture.detectChanges(); // comme dans l'appli : l'affichage suit la saisie
+    answer.dispatchEvent(new Event('blur'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(snack.open).toHaveBeenCalledWith('Modification non enregistrée', 'OK', expect.anything());
+    expect(el.querySelectorAll<HTMLTextAreaElement>('[data-test=answer]')[1].value).toBe('Électrique');
+    answer.dispatchEvent(new Event('blur'));
+    await fixture.whenStable();
+    expect(sync.dispatch).toHaveBeenCalledTimes(2);
+    expect(sync.dispatch).toHaveBeenLastCalledWith('set_shared', { target_id: 'q2', field: 'answer', value: 'Électrique' });
+  });
+
+  it('application masquée ou fermée avec une réponse en cours : elle est enregistrée', async () => {
+    const { fixture, el } = setup();
+    const answers = el.querySelectorAll<HTMLTextAreaElement>('[data-test=answer]');
+    answers[0].value = 'Bonne';
+    answers[0].dispatchEvent(new Event('input'));
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await fixture.whenStable();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q1', field: 'answer', value: 'Bonne' });
+    visibility.mockRestore();
+
+    sync.dispatch.mockClear();
+    answers[2].value = 'Oui';
+    answers[2].dispatchEvent(new Event('input'));
+    window.dispatchEvent(new Event('pagehide'));
+    await fixture.whenStable();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q3', field: 'answer', value: 'Oui' });
+    fixture.destroy();
+  });
+
   it('visite clôturée : cases et réponses désactivées', () => {
     const { el } = setup(makeState(true));
     expect(el.querySelector<HTMLInputElement>('[data-test=asked] input')?.disabled).toBe(true);

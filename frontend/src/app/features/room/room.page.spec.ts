@@ -288,6 +288,52 @@ describe('RoomPage', () => {
     expect(sync.dispatch).toHaveBeenCalledWith('set_comment', { room_id: 'r1', text: 'Humide' });
   });
 
+  it('application masquée ou fermée avec un champ actif : le brouillon est enregistré', async () => {
+    const { fixture, el } = await setup();
+    const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
+    comment.value = 'Humide';
+    comment.dispatchEvent(new Event('input'));
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await settle(fixture);
+    expect(sync.dispatch).toHaveBeenCalledWith('set_comment', { room_id: 'r1', text: 'Humide' });
+    visibility.mockRestore();
+
+    sync.dispatch.mockClear();
+    const answer = q<HTMLTextAreaElement>(el, '[data-test=answer]');
+    answer.value = 'Fioul';
+    answer.dispatchEvent(new Event('input'));
+    window.dispatchEvent(new Event('pagehide'));
+    await settle(fixture);
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q1', field: 'answer', value: 'Fioul' });
+  });
+
+  it('retour au premier plan : rien n\'est envoyé ; après destruction, plus d\'écoute', async () => {
+    const { fixture, el } = await setup();
+    const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
+    comment.value = 'Humide';
+    comment.dispatchEvent(new Event('input'));
+    document.dispatchEvent(new Event('visibilitychange')); // visible
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    fixture.destroy();
+    sync.dispatch.mockClear();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('échec d\'enregistrement : le brouillon est gardé à l\'écran', async () => {
+    sync.dispatch.mockRejectedValue(new Error('quota'));
+    const { fixture, el } = await setup();
+    const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
+    comment.value = 'Humide';
+    comment.dispatchEvent(new Event('input'));
+    await settle(fixture); // comme dans l'appli : l'affichage suit la saisie
+    comment.dispatchEvent(new Event('blur'));
+    await settle(fixture);
+    expect(snack.open).toHaveBeenCalled();
+    expect(q<HTMLTextAreaElement>(el, '[data-test=comment]').value).toBe('Humide');
+  });
+
   it('une réponse distante n\'écrase pas le champ en cours de saisie', async () => {
     const { fixture, el } = await setup();
     const answer = q<HTMLTextAreaElement>(el, '[data-test=answer]');
