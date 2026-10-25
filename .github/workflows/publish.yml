@@ -1,0 +1,88 @@
+name: Publication
+
+run-name: Publication de ${{ github.ref_name }}
+
+# Lancé par le push d'un tag de version (ex. v1.2.3). Le motif ci-dessous est large : le job
+# « version » vérifie le format exact avant toute construction.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Deux publications du même tag se marcheraient dessus : la seconde attend la fin de la première
+# au lieu de l'annuler (une publication interrompue laisserait des images à moitié poussées).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Vérification du tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      date: ${{ steps.check.outputs.date }}
+    steps:
+      # Le nom du tag passe par une variable d'environnement, jamais par interpolation directe
+      # dans le script : un nom de tag malveillant ne peut ainsi pas injecter de commande.
+      - name: Vérification du format vX.Y.Z
+        id: check
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag invalide « $TAG » : format attendu vX.Y.Z (ex. v1.2.3)."
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Image ${{ matrix.arch }}
+    needs: version
+    runs-on: linux/${{ matrix.arch }}
+    strategy:
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v7
+
+      # Construction native sur le runner de l'architecture ; l'authentification Docker Hub est
+      # celle déjà configurée sur les runners auto-hébergés.
+      - name: Construction et envoi de l'image
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.version.outputs.version }}
+          BUILD_DATE: ${{ needs.version.outputs.date }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          docker buildx build \
+            --tag "mgarnier11/visite:$ARCH" \
+            --build-arg "VERSION=v$VERSION" \
+            --build-arg "COMMIT=$COMMIT" \
+            --build-arg "DATE=$BUILD_DATE" \
+            --cache-from "type=registry,ref=registry.mgarnier11.fr/visite:buildcache-$ARCH" \
+            --cache-to "type=registry,ref=registry.mgarnier11.fr/visite:buildcache-$ARCH,mode=max" \
+            --push \
+            .
+
+  publish:
+    name: Image multi-arch
+    needs: [version, build]
+    runs-on: linux/amd64
+    steps:
+      - name: Publication des tags version et latest
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          docker buildx imagetools create \
+            --tag "mgarnier11/visite:$VERSION" \
+            --tag mgarnier11/visite:latest \
+            mgarnier11/visite:amd64 \
+            mgarnier11/visite:arm64
