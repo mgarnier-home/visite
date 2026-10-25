@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -150,5 +151,69 @@ func TestFormatNumber(t *testing.T) {
 		if got := formatNumber(in); got != want {
 			t.Errorf("formatNumber(%v) = %q, attendu %q", in, got, want)
 		}
+	}
+}
+
+// cell renvoie la cellule col de la première ligne dont la colonne type vaut typ et la
+// colonne point vaut point.
+func cell(t *testing.T, rows [][]string, typ, point string, col int) string {
+	t.Helper()
+	for _, r := range rows {
+		if r[3] == typ && r[2] == point {
+			return r[col]
+		}
+	}
+	t.Fatalf("ligne %s/%s introuvable", typ, point)
+	return ""
+}
+
+func TestFormulaInjectionEscaped(t *testing.T) {
+	for _, prefix := range []string{"=", "+", "-", "@", "\t", "\r"} {
+		d := fixture()
+		v := prefix + "x"
+		d.Fiche.Address = v
+		d.Fiche.AgentPhone = ptr(v)
+		d.Fiche.ListingURL = ptr(v)
+		d.Rooms[2].Name = v
+		d.Points[0].Label = v
+		d.Points[2].Label = "Sol"
+		d.Questions[0].Text = v
+		d.Shared["p-sol"]["value"] = raw(strconv.Quote(v))
+		d.Shared["q-ch"]["answer"] = raw(strconv.Quote(v))
+		d.Comments["r-salon"][1] = v
+		rows := Rows(d)
+		want := "'" + v
+		checks := map[string]string{
+			"address":     cell(t, rows, "fiche", "address", 4),
+			"agent_phone": cell(t, rows, "fiche", "agent_phone", 4),
+			"listing_url": cell(t, rows, "fiche", "listing_url", 4),
+			"pièce":       cell(t, rows, "note", want, 1),
+			"point":       cell(t, rows, "note", want, 2),
+			"constat":     cell(t, rows, "constat", "Sol", 4),
+			"question":    cell(t, rows, "question", want, 2),
+			"réponse":     cell(t, rows, "question", want, 4),
+			"commentaire": cell(t, rows, "commentaire", "", fixedCols),
+		}
+		for name, got := range checks {
+			if got != want {
+				t.Errorf("préfixe %q, %s = %q, attendu %q", prefix, name, got, want)
+			}
+		}
+	}
+}
+
+func TestFormulaEscapingLeavesNumbersAlone(t *testing.T) {
+	d := fixture()
+	d.Shared["p-fen"]["works_eur"] = raw("-1500")
+	d.Shared["p-sol"]["value"] = raw(`"sain"`)
+	rows := Rows(d)
+	if got := cell(t, rows, "case", "Fenêtres", fixedCols+d.Participants+1); got != "-1500" {
+		t.Errorf("travaux = %q, attendu -1500", got)
+	}
+	if got := cell(t, rows, "total travaux", "", 4); got != "-1500" {
+		t.Errorf("total travaux = %q, attendu -1500", got)
+	}
+	if got := cell(t, rows, "constat", "Sol", 4); got != "sain" {
+		t.Errorf("constat = %q, attendu sain", got)
 	}
 }

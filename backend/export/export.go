@@ -39,7 +39,7 @@ type builder struct {
 
 func (b *builder) row(room, point, typ, value string) []string {
 	r := make([]string, fixedCols+b.d.Participants+2)
-	r[0], r[1], r[2], r[3], r[4] = b.d.Code, room, point, typ, value
+	r[0], r[1], r[2], r[3], r[4] = b.d.Code, text(room), text(point), typ, value
 	b.rows = append(b.rows, r)
 	return r
 }
@@ -81,7 +81,7 @@ func Rows(d Data) [][]string {
 		}
 		r := b.row(room.Name, "", "commentaire", "")
 		for n := 1; n <= d.Participants; n++ {
-			r[fixedCols+n-1] = d.Comments[room.ID][n]
+			r[fixedCols+n-1] = text(d.Comments[room.ID][n])
 		}
 		if summary {
 			b.summaryRows(room, points, totalWorks)
@@ -149,7 +149,7 @@ func (b *builder) ficheRows() {
 		if v == nil {
 			return ""
 		}
-		return *v
+		return text(*v)
 	}
 	integer := func(v *int) string {
 		if v == nil {
@@ -157,7 +157,7 @@ func (b *builder) ficheRows() {
 		}
 		return strconv.Itoa(*v)
 	}
-	add("address", f.Address)
+	add("address", text(f.Address))
 	add("price_eur", num(f.PriceEUR))
 	add("living_area_m2", num(f.LivingAreaM2))
 	add("floor_area_m2", num(f.FloorAreaM2))
@@ -247,7 +247,7 @@ func (d Data) sharedValue(target, field string) string {
 		if x == "na" {
 			return "N/A"
 		}
-		return x
+		return text(x)
 	case float64:
 		return formatNumber(x)
 	case bool:
@@ -256,6 +256,16 @@ func (d Data) sharedValue(target, field string) string {
 		}
 	}
 	return ""
+}
+
+// text neutralise un texte libre qu'un tableur prendrait pour une formule : une apostrophe
+// est ajoutée devant =, +, -, @, tabulation ou retour chariot en tête. Ne jamais l'appliquer
+// aux nombres formatés (formatNumber), qui doivent rester des nombres.
+func text(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
 }
 
 // formatNumber : virgule décimale, pas de séparateur de milliers, 2 décimales au plus
