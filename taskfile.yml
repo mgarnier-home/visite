@@ -36,3 +36,11 @@ tasks:
     dir: ./backend
     cmds:
       - go test ./...
+  front:dev:
+    dir: ./frontend
+    cmds:
+      - npx ng serve --proxy-config proxy.conf.json
+  front:test:
+    dir: ./frontend
+    cmds:
+      - npx ng test --watch=false
