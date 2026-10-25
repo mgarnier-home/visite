@@ -49,10 +49,7 @@
       <input matInput data-test="price" type="text" appNumeric="integer" [formControl]="form.price_eur" />
     </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Date et heure de la visite</mat-label>
-      <input matInput data-test="visit-at" type="datetime-local" [formControl]="form.visit_at" />
-    </mat-form-field>
+    <app-date-time-input data-test="visit-at" label="Date et heure de la visite" [formControl]="form.visit_at" />
 
     <mat-form-field appearance="outline">
       <mat-label>Surface habitable (m²)</mat-label>

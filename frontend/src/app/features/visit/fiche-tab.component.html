@@ -3,37 +3,52 @@
     @if (editable()) {
       <form class="form" (submit)="$event.preventDefault()">
         @for (field of fields; track field.name) {
-          <label class="field">
-            <span>{{ field.label }}</span>
-            @if (field.kind === 'dpe') {
-              <select [attr.data-field]="field.name" [disabled]="closed()" (change)="onChange(field, $event)">
-                <option value="" [selected]="!inputValue(field)">—</option>
-                @for (c of dpeClasses; track c) {
-                  <option [value]="c" [selected]="inputValue(field) === c">{{ c }}</option>
-                }
-              </select>
-            } @else if (numericMode(field.kind); as mode) {
-              <input
-                [attr.data-field]="field.name"
-                type="text"
-                [appNumeric]="mode"
-                autocapitalize="none"
-                [value]="inputValue(field)"
-                [disabled]="closed()"
-                (change)="onChange(field, $event)"
-              />
-            } @else {
-              <input
-                [attr.data-field]="field.name"
-                [type]="inputType(field.kind)"
-                autocomplete="off"
-                autocapitalize="none"
-                [value]="inputValue(field)"
-                [disabled]="closed()"
-                (change)="onChange(field, $event)"
-              />
-            }
-          </label>
+          @if (field.kind === 'datetime') {
+            <app-date-time-input
+              [attr.data-field]="field.name"
+              [label]="field.label"
+              [ngModel]="fiche()?.[field.name]"
+              [ngModelOptions]="{ standalone: true }"
+              [disabled]="closed()"
+              (ngModelChange)="onDateTime(field, $event)"
+            />
+          } @else {
+            <label class="field">
+              <span>{{ field.label }}</span>
+              @if (field.kind === 'dpe') {
+                <select
+                  [attr.data-field]="field.name"
+                  [disabled]="closed()"
+                  (change)="onChange(field, $event)"
+                >
+                  <option value="" [selected]="!inputValue(field)">—</option>
+                  @for (c of dpeClasses; track c) {
+                    <option [value]="c" [selected]="inputValue(field) === c">{{ c }}</option>
+                  }
+                </select>
+              } @else if (numericMode(field.kind); as mode) {
+                <input
+                  [attr.data-field]="field.name"
+                  type="text"
+                  [appNumeric]="mode"
+                  autocapitalize="none"
+                  [value]="inputValue(field)"
+                  [disabled]="closed()"
+                  (change)="onChange(field, $event)"
+                />
+              } @else {
+                <input
+                  [attr.data-field]="field.name"
+                  [type]="inputType(field.kind)"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  [value]="inputValue(field)"
+                  [disabled]="closed()"
+                  (change)="onChange(field, $event)"
+                />
+              }
+            </label>
+          }
         }
       </form>
     } @else {

@@ -1,9 +1,11 @@
 import { Component, computed, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Fiche } from '../../core/api.types';
 import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compute';
 import { formatEur } from '../../core/format';
-import { localIsoWithOffset, SyncService } from '../../core/sync.service';
+import { SyncService } from '../../core/sync.service';
+import { DateTimeInputComponent } from '../../shared/date-time-input.component';
 import { NumericDirective, NumericMode, parseNumeric } from '../../shared/numeric.directive';
 
 type FicheKind = 'text' | 'eur' | 'number' | 'integer' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
@@ -16,19 +18,10 @@ interface FicheField {
 /** Classes énergétiques du DPE (même liste que la création, sans importer la page). */
 const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** Valeur d'un `<input type="datetime-local">` (heure locale) pour un instant RFC 3339. */
-function toLocalInput(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 /** Fiche du bien : lecture seule, ou formulaire pour le créateur de la visite. */
 @Component({
   selector: 'app-fiche-tab',
-  imports: [NumericDirective],
+  imports: [FormsModule, DateTimeInputComponent, NumericDirective],
   templateUrl: './fiche-tab.component.html',
   styleUrl: './fiche-tab.component.scss',
 })
@@ -109,14 +102,11 @@ export class FicheTabComponent {
   /** Valeur initiale d'un champ de saisie. */
   protected inputValue(field: FicheField): string {
     const v = this.fiche()?.[field.name] ?? null;
-    if (field.kind === 'datetime') return toLocalInput(v as string | null);
     return v === null ? '' : String(v);
   }
 
   protected inputType(kind: FicheKind): string {
     switch (kind) {
-      case 'datetime':
-        return 'datetime-local';
       case 'text':
         return 'text';
       default:
@@ -140,12 +130,21 @@ export class FicheTabComponent {
   /** Champ modifié : envoie `set_fiche` si la valeur valide diffère de l'état, sinon restaure l'affichage. */
   protected async onChange(field: FicheField, event: Event): Promise<void> {
     const el = event.target as HTMLInputElement | HTMLSelectElement;
-    const current = this.fiche()?.[field.name] ?? null;
     const next = this.parse(field, el);
-    if (next === undefined || next === current || this.sameInstant(field, next, current)) {
-      if (next === undefined) el.value = this.inputValue(field);
-      return;
-    }
+    if (next === undefined) el.value = this.inputValue(field);
+    else await this.save(field, next);
+  }
+
+  /** Date et heure de la visite modifiées (le composant n'émet que des valeurs valides). */
+  protected async onDateTime(field: FicheField, next: string | null): Promise<void> {
+    const current = this.fiche()?.[field.name] ?? null;
+    if (next === current || this.sameInstant(next, current)) return;
+    await this.save(field, next);
+  }
+
+  private async save(field: FicheField, next: string | number | null): Promise<void> {
+    const current = this.fiche()?.[field.name] ?? null;
+    if (next === current) return;
     try {
       await this.sync.dispatch('set_fiche', { fields: { [field.name]: next } });
     } catch {
@@ -163,11 +162,6 @@ export class FicheTabComponent {
         if (raw === '') return null;
         return parseNumeric(raw) ?? undefined; // « , » seul : saisie ignorée
       }
-      case 'datetime': {
-        if (raw === '') return null;
-        const d = new Date(raw);
-        return Number.isNaN(d.getTime()) ? undefined : localIsoWithOffset(d);
-      }
       case 'text':
         if (field.name === 'address' && raw === '') return undefined; // l'adresse est obligatoire
         return raw === '' ? null : raw;
@@ -176,12 +170,7 @@ export class FicheTabComponent {
     }
   }
 
-  private sameInstant(field: FicheField, next: unknown, current: unknown): boolean {
-    return (
-      field.kind === 'datetime' &&
-      typeof next === 'string' &&
-      typeof current === 'string' &&
-      new Date(next).getTime() === new Date(current).getTime()
-    );
+  private sameInstant(next: string | null, current: unknown): boolean {
+    return typeof next === 'string' && typeof current === 'string' && new Date(next).getTime() === new Date(current).getTime();
   }
 }

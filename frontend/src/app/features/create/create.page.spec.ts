@@ -4,6 +4,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { VisitState } from '../../core/api.types';
 import { LocalStore } from '../../core/local-store';
+import { provideFrenchDates } from '../../shared/date-time';
+import { provideAppIcons } from '../../shared/icons';
 import { CreatePage } from './create.page';
 
 describe('CreatePage', () => {
@@ -21,6 +23,8 @@ describe('CreatePage', () => {
         { provide: ApiClient, useValue: api },
         { provide: LocalStore, useValue: store },
         provideRouter([]),
+        provideFrenchDates(),
+        provideAppIcons(),
       ],
     });
   });
@@ -200,6 +204,24 @@ describe('CreatePage', () => {
     expect(fiche.living_area_m2).toBe(85.5);
     expect(fiche.rooms_count).toBe(4);
     expect(fiche.floor_area_m2).toBeNull();
+  });
+
+  it('date et heure de la visite : visit_at envoyé en RFC 3339 local', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    for (const [sel, v] of [['[data-test=visit-at] [data-test=date]', '25/10/2026'], ['[data-test=visit-at] [data-test=time]', '1430']]) {
+      const input = el.querySelector(sel) as HTMLInputElement;
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new Event('blur'));
+    }
+    await settle(fixture, 300);
+    submit().click();
+    await settle(fixture);
+    expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
   });
 
   it('champs numériques en texte filtré', () => {

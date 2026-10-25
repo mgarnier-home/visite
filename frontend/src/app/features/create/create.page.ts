@@ -11,8 +11,8 @@ import { ApiClient, ApiError } from '../../core/api.client';
 import { Fiche, VisitState } from '../../core/api.types';
 import { CODE_RE, normalizeCode } from '../../core/code';
 import { LocalStore } from '../../core/local-store';
-import { localIsoWithOffset } from '../../core/sync.service';
 import { normalizeCodeWhileTyping } from '../code-typing';
+import { DateTimeInputComponent } from '../../shared/date-time-input.component';
 import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
 
 type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
@@ -24,7 +24,7 @@ export const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 @Component({
   selector: 'app-create-page',
-  imports: [ReactiveFormsModule, NumericDirective, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [ReactiveFormsModule, DateTimeInputComponent, NumericDirective, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   templateUrl: './create.page.html',
   styleUrl: './create.page.scss',
 })
@@ -46,7 +46,7 @@ export class CreatePage {
     living_area_m2: textControl(),
     floor_area_m2: textControl(),
     land_area_m2: textControl(),
-    visit_at: textControl(),
+    visit_at: new FormControl<string | null>(null),
     agent_name: textControl(),
     agent_phone: textControl(),
     agent_email: textControl(),
@@ -119,14 +119,13 @@ export class CreatePage {
 
   private buildFiche(): Fiche {
     const f = this.form;
-    const visitAt = f.visit_at.value ? new Date(f.visit_at.value) : null;
     return {
       address: f.address.value.trim(),
       price_eur: parseNumeric(f.price_eur.value),
       living_area_m2: parseNumeric(f.living_area_m2.value),
       floor_area_m2: parseNumeric(f.floor_area_m2.value),
       land_area_m2: parseNumeric(f.land_area_m2.value),
-      visit_at: visitAt && !Number.isNaN(visitAt.getTime()) ? localIsoWithOffset(visitAt) : null,
+      visit_at: f.visit_at.value,
       agent_name: this.text(f.agent_name.value),
       agent_phone: this.text(f.agent_phone.value),
       agent_email: this.text(f.agent_email.value),

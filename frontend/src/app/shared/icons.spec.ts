@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { APP_ICON_PATHS, provideAppIcons } from './icons';
 
-const NAMES = ['add', 'delete', 'photo_camera', 'cloud_done', 'cloud_off', 'sync', 'check', 'close', 'warning', 'flag', 'more_vert', 'chevron_left', 'chevron_right', 'edit', 'visibility_off', 'download', 'content_copy', 'lock', 'home', 'settings', 'call', 'mail', 'link', 'drag_indicator', 'arrow_back'];
+const NAMES = ['add', 'delete', 'photo_camera', 'cloud_done', 'cloud_off', 'sync', 'check', 'close', 'warning', 'flag', 'more_vert', 'chevron_left', 'chevron_right', 'edit', 'visibility_off', 'download', 'content_copy', 'lock', 'home', 'settings', 'call', 'mail', 'link', 'drag_indicator', 'arrow_back', 'calendar_month'];
 
 describe('provideAppIcons', () => {
   it('enregistre exactement les icônes prévues', () => {
