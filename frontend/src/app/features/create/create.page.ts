@@ -8,7 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Observable, Subject, catchError, from, map, of, switchMap, timer } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
-import { Fiche } from '../../core/api.types';
+import { Fiche, VisitState } from '../../core/api.types';
 import { CODE_RE, normalizeCode } from '../../core/code';
 import { LocalStore } from '../../core/local-store';
 import { localIsoWithOffset } from '../../core/sync.service';
@@ -151,18 +151,16 @@ export class CreatePage {
     this.busy.set(true);
     this.error.set('');
     try {
-      const state = await this.api.create({ code, fiche: this.buildFiche() });
-      try {
-        await this.store.saveState(code, state);
-      } catch {
-        // La visite existe côté serveur : réessayer la création donnerait un 409.
-        this.error.set('Visite créée, mais l\'enregistrement local a échoué');
-        await this.router.navigate(['/v', code]);
-        return;
-      }
-      await this.router.navigate(['/v', code]);
+      await this.open(code, await this.api.create({ code, fiche: this.buildFiche() }));
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
+        // Réponse d'une création précédente perdue (réseau coupé) : la visite est peut-être la
+        // mienne. GET sans join, pour ne jamais devenir participant de la visite d'un autre.
+        const mine = await this.ownVisit(code);
+        if (mine) {
+          await this.open(code, mine);
+          return;
+        }
         this.codeStatus.set('taken');
         this.error.set('Ce code est déjà pris');
       } else if (e instanceof ApiError && e.status === 0) {
@@ -173,5 +171,26 @@ export class CreatePage {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** État de la visite si cet appareil en est le créateur, sinon null. */
+  private async ownVisit(code: string): Promise<VisitState | null> {
+    try {
+      const state = await this.api.state(code);
+      return state.visit.is_creator ? state : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Enregistre l'état de la visite créée puis l'ouvre. */
+  private async open(code: string, state: VisitState): Promise<void> {
+    try {
+      await this.store.saveState(code, state);
+    } catch {
+      // La visite existe côté serveur : réessayer la création donnerait un 409.
+      this.error.set('Visite créée, mais l\'enregistrement local a échoué');
+    }
+    await this.router.navigate(['/v', code]);
   }
 }

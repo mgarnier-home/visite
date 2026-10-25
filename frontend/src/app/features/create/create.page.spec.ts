@@ -7,7 +7,7 @@ import { LocalStore } from '../../core/local-store';
 import { CreatePage } from './create.page';
 
 describe('CreatePage', () => {
-  const api = { exists: vi.fn(), create: vi.fn() };
+  const api = { exists: vi.fn(), create: vi.fn(), state: vi.fn(), join: vi.fn() };
   const store = { saveState: vi.fn() };
   const navigate = vi.fn();
 
@@ -99,8 +99,41 @@ describe('CreatePage', () => {
     expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
   });
 
+  it('409 après une réponse perdue : c\'est ma visite, elle est enregistrée et ouverte', async () => {
+    const mine = { seq: 3, visit: { code: 'maison-x', is_creator: true } } as unknown as VisitState;
+    api.create.mockRejectedValue(new ApiError(409, 'conflict'));
+    api.state.mockResolvedValue(mine);
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    type(el, '[data-test=code]', 'maison-x');
+    await settle(fixture, 300);
+    submit().click();
+    await settle(fixture);
+    expect(api.state).toHaveBeenCalledWith('maison-x');
+    // pas de join : il ferait de l'appareil un participant de la visite d'un autre
+    expect(api.join).not.toHaveBeenCalled();
+    expect(store.saveState).toHaveBeenCalledWith('maison-x', mine);
+    expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
+    expect(el.textContent).not.toContain('Ce code est déjà pris');
+  });
+
+  it('409 sur la visite d\'un autre (participant non créateur) : « Ce code est déjà pris »', async () => {
+    api.create.mockRejectedValue(new ApiError(409, 'conflict'));
+    api.state.mockResolvedValue({ seq: 3, visit: { code: 'maison-x', is_creator: false } } as unknown as VisitState);
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    type(el, '[data-test=code]', 'maison-x');
+    await settle(fixture, 300);
+    submit().click();
+    await settle(fixture);
+    expect(el.textContent).toContain('Ce code est déjà pris');
+    expect(store.saveState).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('affiche « Ce code est déjà pris » sur 409', async () => {
     api.create.mockRejectedValue(new ApiError(409, 'conflict'));
+    api.state.mockRejectedValue(new ApiError(403, 'forbidden'));
     const { fixture, el, submit } = setup();
     type(el, '[data-test=address]', '12 rue des Lilas');
     type(el, '[data-test=code]', 'maison-x');
