@@ -3,7 +3,6 @@ import { DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ApiClient, ApiError } from '../../core/api.client';
@@ -14,7 +13,7 @@ import { normalizeCodeWhileTyping } from '../code-typing';
 
 @Component({
   selector: 'app-home-page',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule],
+  imports: [DatePipe, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule],
   templateUrl: './home.page.html',
   styleUrl: './home.page.scss',
 })

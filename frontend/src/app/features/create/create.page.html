@@ -39,11 +39,17 @@
     <mat-form-field appearance="outline">
       <mat-label>Adresse</mat-label>
       <input matInput data-test="address" required autocomplete="street-address" [formControl]="form.address" />
+      @if (form.address.touched && form.address.hasError('required')) {
+        <mat-error>L'adresse est obligatoire</mat-error>
+      }
     </mat-form-field>
 
     <mat-form-field appearance="outline">
       <mat-label>Prix (€)</mat-label>
       <input matInput data-test="price" type="number" inputmode="numeric" min="0" [formControl]="form.price_eur" />
+      @if (form.price_eur.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
 
     <mat-form-field appearance="outline">
@@ -54,27 +60,45 @@
     <mat-form-field appearance="outline">
       <mat-label>Surface habitable (m²)</mat-label>
       <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.living_area_m2" />
+      @if (form.living_area_m2.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Surface au sol (m²)</mat-label>
       <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.floor_area_m2" />
+      @if (form.floor_area_m2.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Terrain (m²)</mat-label>
       <input matInput type="number" inputmode="decimal" min="0" [formControl]="form.land_area_m2" />
+      @if (form.land_area_m2.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
 
     <mat-form-field appearance="outline">
       <mat-label>Nombre de pièces</mat-label>
       <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.rooms_count" />
+      @if (form.rooms_count.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Nombre de chambres</mat-label>
       <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.bedrooms_count" />
+      @if (form.bedrooms_count.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Année de construction</mat-label>
       <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.construction_year" />
+      @if (form.construction_year.hasError('min')) {
+        <mat-error>Doit être positif ou nul</mat-error>
+      }
     </mat-form-field>
 
     <mat-form-field appearance="outline">

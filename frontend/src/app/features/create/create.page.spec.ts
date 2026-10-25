@@ -121,4 +121,46 @@ describe('CreatePage', () => {
     await settle(fixture);
     expect(el.textContent).toContain('Il faut du réseau pour créer une visite');
   });
+
+  it('ignore la réponse tardive d\'un code précédent', async () => {
+    let resolveOld!: (v: { exists: boolean }) => void;
+    api.exists.mockReturnValueOnce(new Promise((r) => (resolveOld = r)));
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=address]', 'x');
+    type(el, '[data-test=code]', 'abc');
+    await settle(fixture, 300);
+    expect(api.exists).toHaveBeenCalledWith('abc');
+    type(el, '[data-test=code]', 'abcd');
+    resolveOld({ exists: false });
+    await settle(fixture);
+    expect(el.textContent).not.toContain('Code disponible');
+    expect(submit().disabled).toBe(true);
+    await settle(fixture, 300);
+    expect(api.exists).toHaveBeenLastCalledWith('abcd');
+    expect(submit().disabled).toBe(false);
+  });
+
+  it('navigue quand la visite est créée mais que l\'enregistrement local échoue', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+    store.saveState.mockRejectedValue(new Error('quota'));
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=address]', 'x');
+    type(el, '[data-test=code]', 'maison-x');
+    await settle(fixture, 300);
+    submit().click();
+    await settle(fixture);
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
+  });
+
+  it('refuse un nombre négatif', async () => {
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=address]', 'x');
+    type(el, '[data-test=code]', 'maison-x');
+    type(el, '[data-test=price]', '-5');
+    (el.querySelector('[data-test=price]') as HTMLInputElement).dispatchEvent(new Event('blur'));
+    await settle(fixture, 300);
+    expect(submit().disabled).toBe(true);
+    expect(el.textContent).toContain('Doit être positif ou nul');
+  });
 });

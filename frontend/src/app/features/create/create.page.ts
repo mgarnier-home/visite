@@ -1,12 +1,12 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { Subject, catchError, debounceTime, from, map, of, switchMap } from 'rxjs';
+import { Observable, Subject, catchError, from, map, of, switchMap, timer } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { Fiche } from '../../core/api.types';
 import { CODE_RE, normalizeCode } from '../../core/code';
@@ -16,7 +16,7 @@ import { normalizeCodeWhileTyping } from '../code-typing';
 
 type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
 
-const numberControl = () => new FormControl<number | null>(null);
+const numberControl = () => new FormControl<number | null>(null, { validators: [Validators.min(0)] });
 const textControl = () => new FormControl<string>('', { nonNullable: true });
 
 /** Classes énergétiques du DPE ; `null` = non renseigné. */
@@ -59,21 +59,30 @@ export class CreatePage {
     heating_type: textControl(),
   };
 
+  private readonly group = new FormGroup(this.form);
+  private readonly formValid = toSignal(this.group.statusChanges.pipe(map(() => this.group.valid)), {
+    initialValue: false,
+  });
+
   private readonly codeInput$ = new Subject<string>();
 
   constructor() {
     this.form.address.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((v) => this.address.set(v));
     this.codeInput$
       .pipe(
-        debounceTime(300),
-        switchMap((typed) => {
-          const code = normalizeCode(typed);
-          if (!CODE_RE.test(code)) return of<CodeStatus>('idle');
-          return from(this.api.exists(code)).pipe(
-            map((r): CodeStatus => (r.exists ? 'taken' : 'free')),
-            catchError(() => of<CodeStatus>('error')),
-          );
-        }),
+        // Le délai est dans le switchMap : une réponse tardive d'un code précédent est ignorée.
+        switchMap((typed) =>
+          timer(300).pipe(
+            switchMap((): Observable<CodeStatus> => {
+              const code = normalizeCode(typed);
+              if (!CODE_RE.test(code)) return of<CodeStatus>('idle');
+              return from(this.api.exists(code)).pipe(
+                map((r): CodeStatus => (r.exists ? 'taken' : 'free')),
+                catchError(() => of<CodeStatus>('error')),
+              );
+            }),
+          ),
+        ),
         takeUntilDestroyed(inject(DestroyRef)),
       )
       .subscribe((status) => this.codeStatus.set(status));
@@ -97,6 +106,7 @@ export class CreatePage {
     return (
       !this.busy() &&
       this.address().trim() !== '' &&
+      this.formValid() &&
       this.codeValid() &&
       this.codeStatus() === 'free'
     );
@@ -137,7 +147,14 @@ export class CreatePage {
     this.error.set('');
     try {
       const state = await this.api.create({ code, fiche: this.buildFiche() });
-      await this.store.saveState(code, state);
+      try {
+        await this.store.saveState(code, state);
+      } catch {
+        // La visite existe côté serveur : réessayer la création donnerait un 409.
+        this.error.set('Visite créée, mais l\'enregistrement local a échoué');
+        await this.router.navigate(['/v', code]);
+        return;
+      }
       await this.router.navigate(['/v', code]);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
