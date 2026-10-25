@@ -16,15 +16,18 @@
               <input
                 [attr.data-field]="field.name"
                 [type]="inputType(field.kind)"
-                [attr.inputmode]="field.kind === 'number' || field.kind === 'eur' ? 'decimal' : null"
-                [attr.min]="field.kind === 'number' || field.kind === 'eur' ? 0 : null"
-                [attr.step]="field.kind === 'number' || field.kind === 'eur' ? 'any' : null"
+                [attr.inputmode]="field.kind === 'integer' ? 'numeric' : field.kind === 'number' || field.kind === 'eur' ? 'decimal' : null"
+                [attr.min]="field.kind === 'number' || field.kind === 'eur' || field.kind === 'integer' ? 0 : null"
+                [attr.step]="field.kind === 'integer' ? 1 : field.kind === 'number' || field.kind === 'eur' ? 'any' : null"
                 autocomplete="off"
                 autocapitalize="none"
                 [value]="inputValue(field)"
                 [disabled]="closed()"
                 (change)="onChange(field, $event)"
               />
+            }
+            @if (errors()[field.name]; as message) {
+              <span class="error" role="alert" [attr.data-test]="'error-' + field.name">{{ message }}</span>
             }
           </label>
         }

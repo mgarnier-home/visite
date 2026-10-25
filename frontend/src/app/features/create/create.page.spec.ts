@@ -163,4 +163,31 @@ describe('CreatePage', () => {
     expect(submit().disabled).toBe(true);
     expect(el.textContent).toContain('Doit être positif ou nul');
   });
+
+  it('refuse un nombre décimal pour les pièces, les chambres et l\'année', async () => {
+    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [CreatePage],
+        providers: [
+          { provide: ApiClient, useValue: api },
+          { provide: LocalStore, useValue: store },
+          provideRouter([]),
+        ],
+      });
+      const { fixture, el, submit } = setup();
+      type(el, '[data-test=address]', 'x');
+      type(el, '[data-test=code]', 'maison-x');
+      const input = el.querySelector(`[data-test=${name}]`) as HTMLInputElement;
+      expect(input.getAttribute('step')).toBe('1');
+      type(el, `[data-test=${name}]`, '2.5');
+      input.dispatchEvent(new Event('blur'));
+      await settle(fixture, 300);
+      expect(submit().disabled).toBe(true);
+      expect(el.textContent).toContain('Nombre entier attendu');
+      type(el, `[data-test=${name}]`, '3');
+      await settle(fixture);
+      expect(submit().disabled).toBe(false);
+    }
+  });
 });

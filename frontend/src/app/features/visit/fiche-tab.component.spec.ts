@@ -112,6 +112,24 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
+  it('nombres entiers (pièces, chambres, année) : pas de 1, décimale refusée avec un message', () => {
+    const { fixture, el } = setup();
+    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
+      const input = field<HTMLInputElement>(el, name);
+      expect(input.getAttribute('step')).toBe('1');
+      expect(input.getAttribute('inputmode')).toBe('numeric');
+    }
+    expect(field<HTMLInputElement>(el, 'living_area_m2').getAttribute('step')).toBe('any');
+    change(field<HTMLInputElement>(el, 'rooms_count'), '2.5');
+    fixture.detectChanges();
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    expect(text(el, '[data-test=error-rooms_count]')).toBe('Nombre entier attendu');
+    change(field<HTMLInputElement>(el, 'rooms_count'), '4');
+    fixture.detectChanges();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { rooms_count: 4 } });
+    expect(el.querySelector('[data-test=error-rooms_count]')).toBeNull();
+  });
+
   it('DPE : sélection d\'une classe et retour à « — »', () => {
     const { el } = setup();
     change(field<HTMLSelectElement>(el, 'dpe_ges'), 'B');

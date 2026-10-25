@@ -1,6 +1,6 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -17,6 +17,11 @@ import { normalizeCodeWhileTyping } from '../code-typing';
 type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
 
 const numberControl = () => new FormControl<number | null>(null, { validators: [Validators.min(0)] });
+/** Refuse une valeur décimale (nombre de pièces, de chambres, année). */
+const integerValidator = (c: AbstractControl): ValidationErrors | null =>
+  c.value === null || c.value === '' || Number.isInteger(c.value) ? null : { integer: true };
+const integerControl = () =>
+  new FormControl<number | null>(null, { validators: [Validators.min(0), integerValidator] });
 const textControl = () => new FormControl<string>('', { nonNullable: true });
 
 /** Classes énergétiques du DPE ; `null` = non renseigné. */
@@ -50,11 +55,11 @@ export class CreatePage {
     agent_name: textControl(),
     agent_phone: textControl(),
     agent_email: textControl(),
-    construction_year: numberControl(),
+    construction_year: integerControl(),
     dpe_energy: new FormControl<string | null>(null),
     dpe_ges: new FormControl<string | null>(null),
-    rooms_count: numberControl(),
-    bedrooms_count: numberControl(),
+    rooms_count: integerControl(),
+    bedrooms_count: integerControl(),
     listing_url: textControl(),
     heating_type: textControl(),
   };

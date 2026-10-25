@@ -81,23 +81,29 @@
 
     <mat-form-field appearance="outline">
       <mat-label>Nombre de pièces</mat-label>
-      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.rooms_count" />
+      <input matInput type="number" inputmode="numeric" min="0" step="1" data-test="rooms_count" [formControl]="form.rooms_count" />
       @if (form.rooms_count.hasError('min')) {
         <mat-error>Doit être positif ou nul</mat-error>
+      } @else if (form.rooms_count.hasError('integer')) {
+        <mat-error>Nombre entier attendu</mat-error>
       }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Nombre de chambres</mat-label>
-      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.bedrooms_count" />
+      <input matInput type="number" inputmode="numeric" min="0" step="1" data-test="bedrooms_count" [formControl]="form.bedrooms_count" />
       @if (form.bedrooms_count.hasError('min')) {
         <mat-error>Doit être positif ou nul</mat-error>
+      } @else if (form.bedrooms_count.hasError('integer')) {
+        <mat-error>Nombre entier attendu</mat-error>
       }
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Année de construction</mat-label>
-      <input matInput type="number" inputmode="numeric" min="0" [formControl]="form.construction_year" />
+      <input matInput type="number" inputmode="numeric" min="0" step="1" data-test="construction_year" [formControl]="form.construction_year" />
       @if (form.construction_year.hasError('min')) {
         <mat-error>Doit être positif ou nul</mat-error>
+      } @else if (form.construction_year.hasError('integer')) {
+        <mat-error>Nombre entier attendu</mat-error>
       }
     </mat-form-field>
 

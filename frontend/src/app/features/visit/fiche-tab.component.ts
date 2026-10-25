@@ -1,11 +1,11 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Fiche } from '../../core/api.types';
 import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compute';
 import { formatEur } from '../../core/format';
 import { localIsoWithOffset, SyncService } from '../../core/sync.service';
 
-type FicheKind = 'text' | 'eur' | 'number' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
+type FicheKind = 'text' | 'eur' | 'number' | 'integer' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
 interface FicheField {
   name: keyof Fiche;
   label: string;
@@ -43,9 +43,9 @@ export class FicheTabComponent {
     { name: 'living_area_m2', label: 'Surface habitable (m²)', kind: 'number' },
     { name: 'floor_area_m2', label: 'Surface au sol (m²)', kind: 'number' },
     { name: 'land_area_m2', label: 'Terrain (m²)', kind: 'number' },
-    { name: 'rooms_count', label: 'Nombre de pièces', kind: 'number' },
-    { name: 'bedrooms_count', label: 'Nombre de chambres', kind: 'number' },
-    { name: 'construction_year', label: 'Année de construction', kind: 'number' },
+    { name: 'rooms_count', label: 'Nombre de pièces', kind: 'integer' },
+    { name: 'bedrooms_count', label: 'Nombre de chambres', kind: 'integer' },
+    { name: 'construction_year', label: 'Année de construction', kind: 'integer' },
     { name: 'dpe_energy', label: 'DPE énergie', kind: 'dpe' },
     { name: 'dpe_ges', label: 'DPE GES', kind: 'dpe' },
     { name: 'heating_type', label: 'Type de chauffage', kind: 'text' },
@@ -60,6 +60,8 @@ export class FicheTabComponent {
   protected readonly fiche = computed(() => this.state()?.visit.fiche ?? null);
   protected readonly editable = computed(() => !!this.state()?.visit.is_creator);
   protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
+  /** Message d'erreur par champ, pour la dernière saisie refusée. */
+  protected readonly errors = signal<Partial<Record<keyof Fiche, string>>>({});
 
   protected readonly computedRows = computed(() => {
     const s = this.state();
@@ -114,6 +116,7 @@ export class FicheTabComponent {
     switch (kind) {
       case 'eur':
       case 'number':
+      case 'integer':
         return 'number';
       case 'datetime':
         return 'datetime-local';
@@ -129,6 +132,9 @@ export class FicheTabComponent {
     const el = event.target as HTMLInputElement | HTMLSelectElement;
     const current = this.fiche()?.[field.name] ?? null;
     const next = this.parse(field, el);
+    const raw = el.value.trim();
+    const decimal = field.kind === 'integer' && raw !== '' && !Number.isInteger(Number(raw));
+    this.setError(field, decimal ? 'Nombre entier attendu' : null);
     if (next === undefined || next === current || this.sameInstant(field, next, current)) {
       if (next === undefined) el.value = this.inputValue(field);
       return;
@@ -151,6 +157,11 @@ export class FicheTabComponent {
         const n = Number(raw);
         return Number.isFinite(n) && n >= 0 ? n : undefined;
       }
+      case 'integer': {
+        if (raw === '') return null;
+        const n = Number(raw);
+        return Number.isInteger(n) && n >= 0 ? n : undefined;
+      }
       case 'datetime': {
         if (raw === '') return null;
         const d = new Date(raw);
@@ -162,6 +173,13 @@ export class FicheTabComponent {
       default:
         return raw === '' ? null : raw;
     }
+  }
+
+  private setError(field: FicheField, message: string | null): void {
+    this.errors.update((all) => {
+      const { [field.name]: _, ...rest } = all;
+      return message ? { ...rest, [field.name]: message } : rest;
+    });
   }
 
   private sameInstant(field: FicheField, next: unknown, current: unknown): boolean {

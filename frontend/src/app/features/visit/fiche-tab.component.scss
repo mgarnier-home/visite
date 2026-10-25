@@ -28,6 +28,11 @@
     padding: 0 12px;
     font: var(--mat-sys-body-large);
   }
+
+  .error {
+    color: var(--mat-sys-error);
+    font: var(--mat-sys-body-small);
+  }
 }
 
 .readonly {
