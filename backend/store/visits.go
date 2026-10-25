@@ -133,8 +133,8 @@ func (s *Store) CreateVisitExcluding(ctx context.Context, code string, f model.F
 			continue
 		}
 		if sec.Kind == model.KindPerBedroom {
-			for i := 1; i <= bedrooms; i++ {
-				name := sec.Name + " " + strconv.Itoa(i)
+			for n := 1; n <= bedrooms; n++ {
+				name := sec.Name + " " + strconv.Itoa(n)
 				if err := copySection(tx, code, sec, uuid.NewString(), name, position, seq, ""); err != nil {
 					return err
 				}
