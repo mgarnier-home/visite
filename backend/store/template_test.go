@@ -41,8 +41,8 @@ func TestOpenAppliesMigrationsOnce(t *testing.T) {
 			if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 				t.Fatal(err)
 			}
-			if n != 1 {
-				t.Fatalf("schema_migrations = %d lignes, attendu 1", n)
+			if n != 2 {
+				t.Fatalf("schema_migrations = %d lignes, attendu 2", n)
 			}
 		}
 		s.Close()
@@ -173,5 +173,33 @@ func TestSeedTemplateIfEmpty(t *testing.T) {
 	}
 	if got.Version != 1 || len(got.Sections) != 2 {
 		t.Fatalf("le seed ne doit pas écraser: %+v", got)
+	}
+}
+
+func TestTemplateQuestionImportantRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	tpl := model.Template{
+		Sections: []model.TemplateSection{{
+			ID: "s1", Name: "Cuisine", Kind: model.KindRoom, Position: 0,
+			Questions: []model.TemplateQuestion{
+				{ID: "q1", Text: "Importante ?", Position: 0, Important: true},
+				{ID: "q2", Text: "Normale ?", Position: 1},
+			},
+		}},
+	}
+	saved, err := s.SaveTemplate(ctx, tpl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetTemplate(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tp := range []model.Template{saved, got} {
+		qs := tp.Sections[0].Questions
+		if len(qs) != 2 || !qs[0].Important || qs[1].Important {
+			t.Fatalf("questions = %+v", qs)
+		}
 	}
 }

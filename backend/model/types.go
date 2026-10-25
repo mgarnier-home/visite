@@ -44,9 +44,10 @@ type TemplatePoint struct {
 }
 
 type TemplateQuestion struct {
-	ID       string `json:"id"`
-	Text     string `json:"text"`
-	Position int    `json:"position"`
+	ID        string `json:"id"`
+	Text      string `json:"text"`
+	Position  int    `json:"position"`
+	Important bool   `json:"important"`
 }
 
 type Fiche struct {

@@ -12,92 +12,110 @@
         {
           "id": "q-general-1",
           "text": "Pourquoi vendez-vous ? Depuis quand la maison est-elle en vente ?",
-          "position": 0
+          "position": 0,
+          "important": false
         },
         {
           "id": "q-general-2",
           "text": "Depuis combien de temps habitez-vous ici ?",
-          "position": 1
+          "position": 1,
+          "important": false
         },
         {
           "id": "q-general-3",
           "text": "Le prix est-il négociable ? Y a-t-il déjà eu des offres ?",
-          "position": 2
+          "position": 2,
+          "important": false
         },
         {
           "id": "q-general-4",
           "text": "Quelle est la date de libération possible ?",
-          "position": 3
+          "position": 3,
+          "important": false
         },
         {
           "id": "q-general-5",
           "text": "Qu'est-ce qui reste dans la maison (cuisine équipée, luminaires, placards, électroménager) ?",
-          "position": 4
+          "position": 4,
+          "important": false
         },
         {
           "id": "q-general-6",
           "text": "Quels travaux ont été faits, quand, et par qui ? Avez-vous les factures et garanties (décennale) ?",
-          "position": 5
+          "position": 5,
+          "important": false
         },
         {
           "id": "q-general-7",
           "text": "Y a-t-il des travaux à prévoir à court terme ?",
-          "position": 6
+          "position": 6,
+          "important": false
         },
         {
           "id": "q-general-8",
           "text": "Y a-t-il déjà eu des dégâts des eaux, des infiltrations, des fissures ou des sinistres déclarés ?",
-          "position": 7
+          "position": 7,
+          "important": false
         },
         {
           "id": "q-general-9",
           "text": "Quand la toiture, la chaudière et le chauffe-eau ont-ils été installés ou révisés ?",
-          "position": 8
+          "position": 8,
+          "important": false
         },
         {
           "id": "q-general-10",
           "text": "Montant de la taxe foncière ?",
-          "position": 9
+          "position": 9,
+          "important": false
         },
         {
           "id": "q-general-11",
           "text": "Factures annuelles d'énergie (électricité, gaz, fioul, bois) ?",
-          "position": 10
+          "position": 10,
+          "important": false
         },
         {
           "id": "q-general-12",
           "text": "Tout-à-l'égout ou assainissement individuel (fosse) ? Dernier contrôle SPANC ?",
-          "position": 11
+          "position": 11,
+          "important": false
         },
         {
           "id": "q-general-13",
           "text": "Lotissement ou copropriété ? Charges, règlement, ASL ?",
-          "position": 12
+          "position": 12,
+          "important": false
         },
         {
           "id": "q-general-14",
           "text": "Le dossier de diagnostics est-il disponible (DPE, amiante, plomb, électricité, gaz, termites, état des risques) ?",
-          "position": 13
+          "position": 13,
+          "important": false
         },
         {
           "id": "q-general-15",
           "text": "Y a-t-il des servitudes, un droit de passage, des projets de construction à proximité ?",
-          "position": 14
+          "position": 14,
+          "important": false
         },
         {
           "id": "q-general-16",
           "text": "Quelle chambre est la plus chaude ou la plus froide ?",
-          "position": 15
-        },
-        {
-          "id": "q-general-17",
-          "text": "Les chambres à l'étage ont-elles leur propre salle d'eau ou toilettes ?",
-          "position": 16
+          "position": 15,
+          "important": false
         },
         {
           "id": "q-general-18",
-          "text": "Les combles ou le grenier sont-ils aménageables en chambre supplémentaire ?",
-          "position": 17
+          "text": "Les combles ou le grenier sont-ils aménageables en chambre supplémentaire ? Si oui, quelle serait la hauteur sous plafond ?",
+          "position": 16,
+          "important": false
+        },
+        {
+          "id": "q-general-plancher",
+          "text": "Y a-t-il un plancher chauffant ou une climatisation ?",
+          "position": 17,
+          "important": false
         }
       ]
     },
@@ -189,85 +207,40 @@
           "options": [],
           "weight": 1,
           "position": 7
-        }
-      ],
-      "questions": [
-        {
-          "id": "q-exterieur-1",
-          "text": "Quand la toiture a-t-elle été refaite ou démoussée ?",
-          "position": 0
         },
-        {
-          "id": "q-exterieur-2",
-          "text": "Les limites du terrain sont-elles bornées ?",
-          "position": 1
-        },
-        {
-          "id": "q-exterieur-3",
-          "text": "Le terrain est-il en zone inondable ou argileuse (retrait-gonflement) ?",
-          "position": 2
-        },
-        {
-          "id": "q-exterieur-4",
-          "text": "Y a-t-il un puits, une récupération d'eau de pluie, un arrosage automatique ?",
-          "position": 3
-        }
-      ]
-    },
-    {
-      "id": "sec-entree",
-      "name": "Entrée",
-      "kind": "room",
-      "position": 2,
-      "points": [
         {
           "id": "pt-entree-1",
           "label": "Porte d'entrée : isolation, serrure multipoints, joints",
           "type": "case",
           "options": [],
           "weight": 1,
-          "position": 0
-        },
-        {
-          "id": "pt-entree-2",
-          "label": "Rangements (placard, penderie)",
-          "type": "note",
-          "options": [],
-          "weight": 1,
-          "position": 1
-        },
-        {
-          "id": "pt-entree-3",
-          "label": "Tableau électrique : disjoncteurs récents, différentiel 30 mA, mise à la terre",
-          "type": "case",
-          "options": [],
-          "weight": 1,
-          "position": 2
-        },
-        {
-          "id": "pt-entree-4",
-          "label": "Compteurs (Linky, gaz, eau) et leur emplacement",
-          "type": "case",
-          "options": [],
-          "weight": 1,
-          "position": 3
+          "position": 8
         }
       ],
       "questions": [
         {
-          "id": "q-entree-1",
-          "text": "L'installation électrique a-t-elle été refaite ? Quand ?",
-          "position": 0
+          "id": "q-exterieur-1",
+          "text": "Quand la toiture a-t-elle été refaite ou démoussée ?",
+          "position": 0,
+          "important": true
         },
         {
-          "id": "q-entree-2",
-          "text": "Y a-t-il une alarme ou un visiophone ?",
-          "position": 1
+          "id": "q-exterieur-2",
+          "text": "Les limites du terrain sont-elles bornées ?",
+          "position": 1,
+          "important": true
         },
         {
-          "id": "q-entree-3",
-          "text": "La fibre est-elle raccordée ?",
-          "position": 2
+          "id": "q-exterieur-3",
+          "text": "Le terrain est-il en zone inondable ou argileuse (retrait-gonflement) ?",
+          "position": 2,
+          "important": true
+        },
+        {
+          "id": "q-exterieur-4",
+          "text": "Y a-t-il un puits, une récupération d'eau de pluie, un arrosage automatique ?",
+          "position": 3,
+          "important": false
         }
       ]
     },
@@ -275,7 +248,7 @@
       "id": "sec-cuisine",
       "name": "Cuisine",
       "kind": "room",
-      "position": 3,
+      "position": 2,
       "points": [
         {
           "id": "pt-cuisine-1",
@@ -350,22 +323,26 @@
         {
           "id": "q-cuisine-1",
           "text": "La cuisine est-elle vendue équipée ? Quels appareils restent, et de quel âge ?",
-          "position": 0
+          "position": 0,
+          "important": true
         },
         {
           "id": "q-cuisine-2",
           "text": "Plaques au gaz ou à l'électricité ? Arrivée de gaz possible ?",
-          "position": 1
+          "position": 1,
+          "important": true
         },
         {
           "id": "q-cuisine-3",
-          "text": "La cuisine a-t-elle été refaite ? Quand ?",
-          "position": 2
+          "text": "La cuisine a-t-elle été refaite ? Quand, et avez-vous les factures ?",
+          "position": 2,
+          "important": true
         },
         {
           "id": "q-cuisine-4",
           "text": "Peut-on ouvrir la cuisine sur le séjour (mur porteur ou non) ?",
-          "position": 3
+          "position": 3,
+          "important": false
         }
       ]
     },
@@ -373,7 +350,7 @@
       "id": "sec-salon",
       "name": "Salon / séjour",
       "kind": "room",
-      "position": 4,
+      "position": 3,
       "points": [
         {
           "id": "pt-salon-1",
@@ -457,22 +434,20 @@
         {
           "id": "q-salon-1",
           "text": "Quel est le mode de chauffage principal ? Quel coût annuel ?",
-          "position": 0
+          "position": 0,
+          "important": true
         },
         {
           "id": "q-salon-2",
           "text": "La cheminée ou le poêle fonctionne-t-il ? Dernier ramonage (attestation) ?",
-          "position": 1
-        },
-        {
-          "id": "q-salon-3",
-          "text": "Y a-t-il un plancher chauffant ou une climatisation ?",
-          "position": 2
+          "position": 1,
+          "important": false
         },
         {
           "id": "q-salon-4",
           "text": "Quels murs sont porteurs ?",
-          "position": 3
+          "position": 2,
+          "important": false
         }
       ]
     },
@@ -480,7 +455,7 @@
       "id": "sec-chambre",
       "name": "Chambre",
       "kind": "per_bedroom",
-      "position": 5,
+      "position": 4,
       "points": [
         {
           "id": "pt-chambre-1",
@@ -575,7 +550,7 @@
       "id": "sec-salle-de-bain",
       "name": "Salle de bain",
       "kind": "room",
-      "position": 6,
+      "position": 5,
       "points": [
         {
           "id": "pt-salle-de-bain-1",
@@ -646,22 +621,26 @@
         {
           "id": "q-salle-de-bain-1",
           "text": "Quel est le système d'eau chaude (ballon, chaudière, thermodynamique) ? Capacité et âge ?",
-          "position": 0
+          "position": 0,
+          "important": true
         },
         {
           "id": "q-salle-de-bain-2",
-          "text": "La salle de bain a-t-elle été refaite ? Quand ?",
-          "position": 1
+          "text": "La salle de bain a-t-elle été refaite ? Quand, et avez-vous les factures ?",
+          "position": 1,
+          "important": true
         },
         {
           "id": "q-salle-de-bain-3",
           "text": "Y a-t-il déjà eu des fuites ou un dégât des eaux vers la pièce du dessous ?",
-          "position": 2
+          "position": 2,
+          "important": true
         },
         {
           "id": "q-salle-de-bain-4",
           "text": "L'eau est-elle calcaire ? Y a-t-il un adoucisseur ?",
-          "position": 3
+          "position": 3,
+          "important": true
         }
       ]
     },
@@ -669,7 +648,7 @@
       "id": "sec-toilettes",
       "name": "Toilettes",
       "kind": "room",
-      "position": 7,
+      "position": 6,
       "points": [
         {
           "id": "pt-toilettes-1",
@@ -723,12 +702,14 @@
         {
           "id": "q-toilettes-1",
           "text": "Y a-t-il une pompe de relevage ou un broyeur (sanibroyeur) ?",
-          "position": 0
+          "position": 0,
+          "important": false
         },
         {
           "id": "q-toilettes-2",
           "text": "Déjà eu des bouchons ou des remontées d'odeurs ?",
-          "position": 1
+          "position": 1,
+          "important": true
         }
       ]
     },
@@ -736,15 +717,31 @@
       "id": "sec-garage",
       "name": "Garage",
       "kind": "room",
-      "position": 8,
+      "position": 7,
       "points": [
+        {
+          "id": "pt-entree-3",
+          "label": "Tableau électrique : disjoncteurs récents, différentiel 30 mA, mise à la terre",
+          "type": "case",
+          "options": [],
+          "weight": 1,
+          "position": 0
+        },
+        {
+          "id": "pt-entree-4",
+          "label": "Compteurs (Linky, gaz, eau) et leur emplacement",
+          "type": "case",
+          "options": [],
+          "weight": 1,
+          "position": 1
+        },
         {
           "id": "pt-garage-1",
           "label": "Dimensions : voitures, largeur et hauteur de porte",
           "type": "note",
           "options": [],
           "weight": 1,
-          "position": 0
+          "position": 2
         },
         {
           "id": "pt-garage-2",
@@ -755,7 +752,7 @@
             "Motorisée"
           ],
           "weight": 1,
-          "position": 1
+          "position": 3
         },
         {
           "id": "pt-garage-3",
@@ -763,7 +760,7 @@
           "type": "case",
           "options": [],
           "weight": 1,
-          "position": 2
+          "position": 4
         },
         {
           "id": "pt-garage-4",
@@ -771,7 +768,7 @@
           "type": "case",
           "options": [],
           "weight": 1,
-          "position": 3
+          "position": 5
         },
         {
           "id": "pt-garage-5",
@@ -779,7 +776,7 @@
           "type": "case",
           "options": [],
           "weight": 1,
-          "position": 4
+          "position": 6
         },
         {
           "id": "pt-garage-6",
@@ -790,7 +787,7 @@
             "Non"
           ],
           "weight": 1,
-          "position": 5
+          "position": 7
         },
         {
           "id": "pt-garage-7",
@@ -798,7 +795,7 @@
           "type": "case",
           "options": [],
           "weight": 1,
-          "position": 6
+          "position": 8
         },
         {
           "id": "pt-garage-8",
@@ -806,24 +803,45 @@
           "type": "note",
           "options": [],
           "weight": 1,
-          "position": 7
+          "position": 9
         }
       ],
       "questions": [
         {
+          "id": "q-entree-1",
+          "text": "L'installation électrique a-t-elle été refaite ? Quand ?",
+          "position": 0,
+          "important": true
+        },
+        {
+          "id": "q-entree-2",
+          "text": "Y a-t-il une alarme ou un visiophone ?",
+          "position": 1,
+          "important": true
+        },
+        {
+          "id": "q-entree-3",
+          "text": "La fibre est-elle raccordée ?",
+          "position": 2,
+          "important": true
+        },
+        {
           "id": "q-garage-1",
           "text": "Le garage est-il compté dans la surface habitable ? Peut-il être transformé en pièce ?",
-          "position": 0
+          "position": 3,
+          "important": false
         },
         {
           "id": "q-garage-2",
           "text": "Y a-t-il d'autres places de stationnement ?",
-          "position": 1
+          "position": 4,
+          "important": false
         },
         {
           "id": "q-garage-3",
           "text": "La chaudière, le ballon d'eau chaude ou le tableau électrique sont-ils ici ?",
-          "position": 2
+          "position": 5,
+          "important": false
         }
       ]
     },
@@ -831,7 +849,7 @@
       "id": "sec-combles",
       "name": "Combles, cave, buanderie, chaufferie",
       "kind": "room",
-      "position": 9,
+      "position": 8,
       "points": [
         {
           "id": "pt-combles-1",
@@ -878,22 +896,26 @@
         {
           "id": "q-combles-1",
           "text": "La chaudière est-elle entretenue chaque année ? Peut-on voir la dernière attestation ?",
-          "position": 0
+          "position": 0,
+          "important": true
         },
         {
           "id": "q-combles-2",
           "text": "La cave a-t-elle déjà été inondée ?",
-          "position": 1
+          "position": 1,
+          "important": true
         },
         {
           "id": "q-combles-3",
           "text": "Les combles ont-ils été isolés ? Avec quoi et quand ?",
-          "position": 2
+          "position": 2,
+          "important": true
         },
         {
           "id": "q-combles-4",
           "text": "Y a-t-il des panneaux solaires ? Contrat de revente, production annuelle ?",
-          "position": 3
+          "position": 3,
+          "important": false
         }
       ]
     },
@@ -901,7 +923,7 @@
       "id": "sec-environnement",
       "name": "Environnement et quartier",
       "kind": "room",
-      "position": 10,
+      "position": 9,
       "points": [
         {
           "id": "pt-environnement-1",
@@ -956,17 +978,20 @@
         {
           "id": "q-environnement-1",
           "text": "Comment sont les voisins ? Y a-t-il des conflits de voisinage ?",
-          "position": 0
+          "position": 0,
+          "important": true
         },
         {
           "id": "q-environnement-2",
           "text": "Des projets d'aménagement sont-ils prévus (route, lotissement, antenne) ? À vérifier au PLU en mairie",
-          "position": 1
+          "position": 1,
+          "important": true
         },
         {
           "id": "q-environnement-3",
           "text": "Le quartier est-il calme la nuit ?",
-          "position": 2
+          "position": 2,
+          "important": true
         }
       ]
     },
@@ -974,7 +999,7 @@
       "id": "sec-bilan",
       "name": "Bilan",
       "kind": "summary",
-      "position": 11,
+      "position": 10,
       "points": [
         {
           "id": "pt-bilan-1",
