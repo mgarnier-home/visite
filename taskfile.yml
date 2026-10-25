@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  build:back:
+    dir: ./backend
+    vars:
+      VERSION: '{{default "v0.0.0" .VERSION}}'
+      COMMIT: '{{default "commitsha" .COMMIT}}'
+      DATE: '{{default "undefined" .DATE}}'
+    cmds:
+      - go build -ldflags="-X 'github.com/mgarnier-home/utils/buildinfo.Version={{.VERSION}}' -X 'github.com/mgarnier-home/utils/buildinfo.Commit={{.COMMIT}}' -X 'github.com/mgarnier-home/utils/buildinfo.Date={{.DATE}}'" -o ../bin/visite .
+  build:
+    cmds:
+      - task: build:back
+  test:
+    dir: ./backend
+    cmds:
+      - go test ./...
