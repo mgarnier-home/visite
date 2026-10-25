@@ -207,3 +207,36 @@ func TestPhotoDownloadErrors(t *testing.T) {
 	}
 	wantCode(t, do(t, router, "GET", url, devA, ""), 404)
 }
+
+// countFiles compte les fichiers sous dir (0 si dir n'existe pas).
+func countFiles(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, _ error) error {
+		if info != nil && !info.IsDir() {
+			n++
+		}
+		return nil
+	})
+	return n
+}
+
+func TestRefusedPhotoUploadLeavesNoFile(t *testing.T) {
+	router, root := newTestRouterWithPhotos(t)
+	createVisit(t, router, "maison-a", devA)
+	createVisit(t, router, "maison-b", devB)
+	createVisit(t, router, "maison-c", devA)
+	body := `{"ops":[{"op_id":"c1","type":"close_visit","client_ts":1,"payload":{}}]}`
+	wantCode(t, do(t, router, "POST", "/api/visits/maison-c/ops", devA, body), 200)
+
+	wantCode(t, uploadPhoto(t, router, "maison-c", devA, validForm("")), 409)
+	if n := countFiles(t, filepath.Join(root, "maison-c")); n != 0 {
+		t.Errorf("visite clôturée : %d fichier(s) écrit(s)", n)
+	}
+
+	wantCode(t, uploadPhoto(t, router, "maison-a", devA, validForm("")), 201)
+	wantCode(t, uploadPhoto(t, router, "maison-b", devB, validForm("")), 409)
+	if n := countFiles(t, filepath.Join(root, "maison-b")); n != 0 {
+		t.Errorf("id déjà pris : %d fichier(s) écrit(s)", n)
+	}
+}

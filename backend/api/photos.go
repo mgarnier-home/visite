@@ -91,29 +91,26 @@ func (h *handlers) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Le fichier est écrit avant l'enregistrement : s'il échoue, le fichier reste,
-	// inoffensif, et sera réécrit à l'envoi suivant.
-	rel := photos.PhotoPath(code, dirName, takenAt, id)
-	if err := h.photos.Put(rel, content); err != nil {
-		h.internalError(w, err)
+	// Visite clôturée ou id déjà pris : refusé avant d'écrire quoi que ce soit sur le disque.
+	exists, err := h.store.CheckPhotoUpload(r.Context(), code, id)
+	if h.photoRefused(w, err) {
 		return
+	}
+	// Le fichier est écrit avant l'enregistrement : s'il échoue, le fichier reste,
+	// inoffensif, et sera réécrit à l'envoi suivant. Un renvoi d'une photo déjà
+	// enregistrée ne réécrit rien.
+	rel := photos.PhotoPath(code, dirName, takenAt, id)
+	if !exists {
+		if err := h.photos.Put(rel, content); err != nil {
+			h.internalError(w, err)
+			return
+		}
 	}
 	created, err := h.store.AddPhoto(r.Context(), store.PhotoRecord{
 		ID: id, VisitCode: code, RoomID: roomID, DeviceID: device,
 		TakenAt: takenAt, Path: rel, Size: header.Size,
 	})
-	switch {
-	case errors.Is(err, store.ErrClosed):
-		writeError(w, http.StatusConflict, "la visite est clôturée")
-		return
-	case errors.Is(err, store.ErrConflict):
-		writeError(w, http.StatusConflict, "cet id de photo est déjà utilisé")
-		return
-	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusNotFound, "visite ou pièce introuvable")
-		return
-	case err != nil:
-		h.internalError(w, err)
+	if h.photoRefused(w, err) {
 		return
 	}
 	number, err := h.store.ParticipantNumber(r.Context(), code, device)
@@ -126,6 +123,23 @@ func (h *handlers) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, model.Photo{ID: id, RoomID: roomID, Author: number, TakenAt: takenAt.Format(time.RFC3339)})
+}
+
+// photoRefused répond à l'erreur d'enregistrement d'une photo ; faux si err est nil.
+func (h *handlers) photoRefused(w http.ResponseWriter, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, store.ErrClosed):
+		writeError(w, http.StatusConflict, "la visite est clôturée")
+	case errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, "cet id de photo est déjà utilisé")
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "visite ou pièce introuvable")
+	default:
+		h.internalError(w, err)
+	}
+	return true
 }
 
 func (h *handlers) getPhoto(w http.ResponseWriter, r *http.Request) {
