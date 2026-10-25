@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := api.NewRouter(api.Deps{Log: log, Now: time.Now})
+	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Infof("écoute sur %s", addr)
