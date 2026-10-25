@@ -238,6 +238,25 @@ describe('CreatePage', () => {
     expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
   });
 
+  it('Entrée dans le champ heure : la visite part avec l\'heure tapée, sans attendre la sortie du champ', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+    const { fixture, el } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    const date = el.querySelector('[data-test=visit-at] [data-test=date]') as HTMLInputElement;
+    date.value = '25/10/2026';
+    for (const e of ['input', 'change', 'blur']) date.dispatchEvent(new Event(e));
+    await settle(fixture, 300);
+    const time = el.querySelector('[data-test=visit-at] [data-test=time]') as HTMLInputElement;
+    time.value = '1430';
+    time.dispatchEvent(new Event('input'));
+    // Entrée : le navigateur envoie keydown, puis soumet le formulaire (aucun blur)
+    time.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+    expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
+  });
+
   it('heure invalide après une date valide : création désactivée', async () => {
     const { fixture, el, submit } = setup();
     type(el, '[data-test=code]', 'Maison X');
@@ -337,7 +356,7 @@ describe('CreatePage', () => {
       expect(api.getTemplate).toHaveBeenCalledTimes(1);
       submit().click();
       await settle(fixture);
-      expect(el.textContent).toContain('sections exclues invalides');
+      expect(el.textContent).toContain('La liste des pièces a changé : vérifiez-la puis recommencez');
       expect(api.getTemplate).toHaveBeenCalledTimes(2);
     });
   });

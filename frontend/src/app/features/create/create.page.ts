@@ -200,8 +200,8 @@ export class CreatePage {
         this.codeStatus.set('taken');
         this.error.set('Ce code est déjà pris');
       } else if (e instanceof ApiError && e.status === 400 && e.message.includes('sections exclues')) {
-        // Le modèle a changé depuis son chargement : afficher le message et le recharger.
-        this.error.set(e.message);
+        // Le modèle a changé depuis son chargement : prévenir et le recharger.
+        this.error.set('La liste des pièces a changé : vérifiez-la puis recommencez');
         void this.loadTemplate();
       } else if (e instanceof ApiError && e.status === 0) {
         this.error.set('Il faut du réseau pour créer une visite');
