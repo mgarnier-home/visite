@@ -285,19 +285,64 @@ func TestSharedEqualTimestamp(t *testing.T) {
 	}
 }
 
-func TestSharedLosingWriteKeepsSeq(t *testing.T) {
+// Une écriture perdante est acquittée sans changer la valeur, mais la ligne gagnante reçoit
+// un nouveau seq : le prochain /changes de l'expéditeur la lui renvoie et il converge.
+func TestSharedLosingWriteRedeliversWinner(t *testing.T) {
 	e := newEnv(t)
 	q := e.question()
 	_, before := e.apply(devB, op("set_shared", 200, map[string]any{"target_id": q, "field": "asked", "value": true}))
 	res, seq := e.apply(devA, op("set_shared", 100, map[string]any{"target_id": q, "field": "asked", "value": false}))
-	if outcome(res[0]) != "applied" || seq != before {
-		t.Errorf("écriture perdante : %+v, seq %d, veut %d inchangé", res, seq, before)
+	if outcome(res[0]) != "applied" || seq != before+1 {
+		t.Errorf("écriture perdante : %+v, seq %d, veut %d", res, seq, before+1)
 	}
 	if v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'asked'`, q); v != "true" {
 		t.Errorf("valeur = %s, veut true", v)
 	}
+	if dev := e.queryString(`SELECT device_id FROM shared_values WHERE target_id = ? AND field = 'asked'`, q); dev != devB {
+		t.Errorf("auteur = %s, veut B", dev)
+	}
+	if s := e.queryInt(`SELECT seq FROM shared_values WHERE target_id = ? AND field = 'asked'`, q); s != seq {
+		t.Errorf("seq de la valeur gagnante = %d, veut %d", s, seq)
+	}
 	if n := e.queryInt(`SELECT COUNT(*) FROM ops WHERE device_id = ?`, devA); n != 1 {
 		t.Errorf("%d ops journalisées pour A, veut 1", n)
+	}
+	changes, err := e.s.State(context.Background(), e.code, devA, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, sv := range changes.Shared {
+		if sv.TargetID == q && sv.Field == "asked" {
+			found = sv.Value == true
+		}
+	}
+	if !found {
+		t.Errorf("changes depuis %d sans la valeur gagnante : %+v", before, changes.Shared)
+	}
+}
+
+func TestLosingRatingAndCommentGetNewSeq(t *testing.T) {
+	e := newEnv(t)
+	room := e.roomByDir("cuisine")
+	point := e.pointOfType(e.code, "note")
+	_, before := e.apply(devB,
+		op("set_comment", 200, map[string]any{"room_id": room, "text": "récent"}),
+		op("set_rating", 200, map[string]any{"point_id": point, "value": 4}))
+	res, seq := e.apply(devB,
+		op("set_comment", 100, map[string]any{"room_id": room, "text": "ancien"}),
+		op("set_rating", 100, map[string]any{"point_id": point, "value": 1}))
+	if outcome(res[0]) != "applied" || outcome(res[1]) != "applied" || seq != before+2 {
+		t.Fatalf("écritures perdantes : %+v, seq %d, veut %d", res, seq, before+2)
+	}
+	if s := e.queryInt(`SELECT seq FROM room_comments WHERE room_id = ? AND device_id = ?`, room, devB); s != before+1 {
+		t.Errorf("seq du commentaire = %d, veut %d", s, before+1)
+	}
+	if s := e.queryInt(`SELECT seq FROM ratings WHERE point_id = ? AND device_id = ?`, point, devB); s != seq {
+		t.Errorf("seq de la note = %d, veut %d", s, seq)
+	}
+	if v := e.queryInt(`SELECT value FROM ratings WHERE point_id = ? AND device_id = ?`, point, devB); v != 4 {
+		t.Errorf("note = %d, veut 4", v)
 	}
 }
 
@@ -485,10 +530,16 @@ func TestFicheLastWriteWinsPerField(t *testing.T) {
 	if n := e.queryString(`SELECT agent_name FROM visits WHERE code = ?`, e.code); n != "M. Y" {
 		t.Errorf("agent_name = %q", n)
 	}
-	// Tout perd : appliquée sans effet, seq inchangé.
+	// Tout perd : sans effet sur la fiche, mais seq_changed avance pour la renvoyer.
 	res, seq = e.apply(devA, op("set_fiche", 50, map[string]any{"fields": map[string]any{"heating_type": "bois"}}))
-	if outcome(res[0]) != "applied" || seq != before+1 {
-		t.Errorf("sans effet : %+v, seq %d", res, seq)
+	if outcome(res[0]) != "applied" || seq != before+2 {
+		t.Errorf("sans effet : %+v, seq %d, veut %d", res, seq, before+2)
+	}
+	if h := e.queryString(`SELECT heating_type FROM visits WHERE code = ?`, e.code); h != "gaz" {
+		t.Errorf("heating_type = %q, veut gaz", h)
+	}
+	if s := e.queryInt(`SELECT seq_changed FROM visits WHERE code = ?`, e.code); s != seq {
+		t.Errorf("seq_changed = %d, veut %d", s, seq)
 	}
 }
 
@@ -777,15 +828,15 @@ func TestSeqIncrements(t *testing.T) {
 	if _, seq = e.apply(devB, o1); seq != start+2 {
 		t.Errorf("après duplicate : seq %d, veut %d", seq, start+2)
 	}
-	// Écriture plus ancienne : appliquée sans effet, seq inchangé.
-	if _, seq = e.apply(devB, op("set_rating", 50, map[string]any{"point_id": note, "value": 1})); seq != start+2 {
-		t.Errorf("après écriture perdante : seq %d, veut %d", seq, start+2)
+	// Écriture plus ancienne : sans effet sur la valeur, mais seq avance pour la renvoyer.
+	if _, seq = e.apply(devB, op("set_rating", 50, map[string]any{"point_id": note, "value": 1})); seq != start+3 {
+		t.Errorf("après écriture perdante : seq %d, veut %d", seq, start+3)
 	}
 	// Refusée : seq inchangé.
-	if _, seq = e.apply(devB, op("set_rating", 500, map[string]any{"point_id": note, "value": 7})); seq != start+2 {
-		t.Errorf("après refus : seq %d, veut %d", seq, start+2)
+	if _, seq = e.apply(devB, op("set_rating", 500, map[string]any{"point_id": note, "value": 7})); seq != start+3 {
+		t.Errorf("après refus : seq %d, veut %d", seq, start+3)
 	}
-	if _, seq = e.apply(devB); seq != start+2 {
+	if _, seq = e.apply(devB); seq != start+3 {
 		t.Errorf("lot vide : seq %d", seq)
 	}
 }

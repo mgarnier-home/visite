@@ -256,7 +256,9 @@ Règles d'application, dans cet ordre :
    invalide : résultat `rejected` avec un motif (`closed`, `forbidden`, `not_found`, `invalid`).
 3. Pour une valeur (`set_rating`, `set_comment`, `set_shared`, champ de `set_fiche`) : si la
    valeur stockée a un `updated_at` plus récent, l'opération est `applied` mais sans effet
-   (dernière écriture gagnante). À horodatage égal, le plus grand `device_id` l'emporte.
+   (dernière écriture gagnante). À horodatage égal, le plus grand `device_id` l'emporte. La
+   valeur stockée reçoit alors un nouveau `seq` (`seq_changed` pour la fiche) : `changes` la
+   renvoie à l'expéditeur, qui affichait encore sa propre valeur.
 4. Sinon la modification est écrite, `visit_seq` est incrémenté, résultat `applied`.
 
 Un lot est traité opération par opération dans une transaction par opération : une opération

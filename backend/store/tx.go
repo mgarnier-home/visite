@@ -372,3 +372,25 @@ func (t *Tx) PutLWW(kind LWWKind, key LWWKey, value json.RawMessage, ts int64, d
 	}
 	return fmt.Errorf("type de valeur inconnu %d", kind)
 }
+
+// TouchLWW donne le seq à la valeur stockée sans la modifier : une écriture perdante la
+// fait ainsi renvoyer par /changes, pour que son expéditeur reprenne la valeur gagnante.
+// Pour la fiche, seul seq_changed avance.
+func (t *Tx) TouchLWW(kind LWWKind, key LWWKey, seq int64) error {
+	var query string
+	switch kind {
+	case KindRating:
+		query = `UPDATE ratings SET seq = ? WHERE point_id = ? AND device_id = ?`
+	case KindComment:
+		query = `UPDATE room_comments SET seq = ? WHERE room_id = ? AND device_id = ?`
+	case KindShared:
+		query = `UPDATE shared_values SET seq = ? WHERE target_id = ? AND field = ?`
+	case KindFiche:
+		_, err := t.tx.ExecContext(t.ctx, `UPDATE visits SET seq_changed = ? WHERE code = ?`, seq, key.ID)
+		return err
+	default:
+		return fmt.Errorf("type de valeur inconnu %d", kind)
+	}
+	_, err := t.tx.ExecContext(t.ctx, query, seq, key.ID, key.Sub)
+	return err
+}

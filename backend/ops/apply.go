@@ -214,18 +214,19 @@ func (a *applier) newID(id string) error {
 }
 
 // writeLWW applique les règles 3 et 4 : la valeur n'est écrite (avec un nouveau seq)
-// que si elle l'emporte sur la valeur stockée ; sinon l'opération est sans effet.
+// que si elle l'emporte sur la valeur stockée. Sinon la valeur stockée reste, mais reçoit
+// un nouveau seq : l'expéditeur, qui affiche déjà sa propre valeur, la récupère par /changes.
 func (a *applier) writeLWW(kind store.LWWKind, key store.LWWKey, value json.RawMessage) error {
 	ts, dev, ok, err := a.tx.GetLWW(kind, key)
 	if err != nil {
 		return err
 	}
-	if ok && !Wins(ts, dev, a.op.ClientTS, a.device) {
-		return nil
-	}
 	seq, err := a.tx.NextSeq(a.code)
 	if err != nil {
 		return err
+	}
+	if ok && !Wins(ts, dev, a.op.ClientTS, a.device) {
+		return a.tx.TouchLWW(kind, key, seq)
 	}
 	return a.tx.PutLWW(kind, key, value, a.op.ClientTS, a.device, seq)
 }
@@ -490,12 +491,13 @@ func (a *applier) setFiche() error {
 			winners = append(winners, name)
 		}
 	}
-	if len(winners) == 0 {
-		return nil
-	}
 	seq, err := a.tx.NextSeq(a.code)
 	if err != nil {
 		return err
+	}
+	if len(winners) == 0 {
+		// Aucun champ ne gagne : la fiche est renvoyée telle quelle (voir writeLWW).
+		return a.tx.TouchLWW(store.KindFiche, store.LWWKey{ID: a.code}, seq)
 	}
 	for _, name := range winners {
 		if err := a.tx.PutLWW(store.KindFiche, store.LWWKey{ID: a.code, Sub: name}, merged[name], a.op.ClientTS, a.device, seq); err != nil {
