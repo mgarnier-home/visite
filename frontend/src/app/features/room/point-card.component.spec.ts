@@ -137,6 +137,20 @@ describe('PointCardComponent', () => {
     expect(works.value).toBe('500');
   });
 
+  it('menu : un montant collé dans « Travaux » est envoyé à la sortie du champ', async () => {
+    const { fixture, el, host } = setup();
+    (el.querySelector('[data-test=menu-btn]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const works = document.body.querySelector('[data-test=works-input]') as HTMLInputElement;
+    const paste = new Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => '1 500 €' } });
+    works.dispatchEvent(paste);
+    expect(host.setWorks).not.toHaveBeenCalled();
+    works.dispatchEvent(new Event('blur'));
+    expect(host.setWorks).toHaveBeenCalledWith(1500);
+  });
+
   it('menu : Échap, même depuis le champ Travaux, ferme le menu', async () => {
     const { fixture, el } = setup();
     (el.querySelector('[data-test=menu-btn]') as HTMLButtonElement).click();

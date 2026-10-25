@@ -128,6 +128,17 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
+  it('nombre collé dans un champ vide : envoyé à la sortie du champ', () => {
+    const { el } = setup(makeState({}, { living_area_m2: null }));
+    const input = field<HTMLInputElement>(el, 'living_area_m2');
+    const paste = new Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => '85,5 m²' } });
+    input.dispatchEvent(paste);
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    input.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { living_area_m2: 85.5 } });
+  });
+
   it('champs numériques : texte filtré (entier pour prix, pièces, chambres, année ; décimal pour les surfaces)', () => {
     const { el } = setup();
     for (const name of ['price_eur', 'rooms_count', 'bedrooms_count', 'construction_year']) {

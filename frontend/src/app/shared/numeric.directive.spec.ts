@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NumericDirective, parseNumeric, sanitizeNumeric } from './numeric.directive';
 
 describe('sanitizeNumeric', () => {
@@ -120,5 +120,72 @@ describe('NumericDirective', () => {
     Object.defineProperty(paste, 'clipboardData', { value: { getData: () => '12,5 m²' } });
     dec.dispatchEvent(paste);
     expect(dec.value).toBe('12,5');
+  });
+
+  const paste = (input: HTMLInputElement, text: string) => {
+    const event = new Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+    input.dispatchEvent(event);
+  };
+
+  it('collage écrit en code : un `change` part à la sortie du champ', () => {
+    const { dec } = setup();
+    const changes: Event[] = [];
+    dec.addEventListener('change', (e) => changes.push(e));
+    paste(dec, '12,5 m²');
+    expect(changes.length).toBe(0);
+    dec.dispatchEvent(new Event('blur'));
+    expect(dec.value).toBe('12,5');
+    expect(changes.length).toBe(1);
+    dec.dispatchEvent(new Event('blur'));
+    expect(changes.length).toBe(1);
+  });
+
+  it('collage suivi d\'un `change` natif : pas de second `change` à la sortie', () => {
+    const { dec } = setup();
+    const changes: Event[] = [];
+    dec.addEventListener('change', (e) => changes.push(e));
+    paste(dec, '7');
+    dec.dispatchEvent(new Event('change'));
+    dec.dispatchEvent(new Event('blur'));
+    expect(changes.length).toBe(1);
+  });
+
+  it('collage sans effet : aucun `change` à la sortie', () => {
+    const { int } = setup();
+    const changes: Event[] = [];
+    int.addEventListener('change', (e) => changes.push(e));
+    paste(int, 'abc');
+    int.dispatchEvent(new Event('blur'));
+    expect(changes.length).toBe(0);
+  });
+
+  it('collage via execCommand (saisie native) : la valeur nettoyée est insérée, sans `change` de rattrapage', () => {
+    const { dec } = setup();
+    const exec = vi.fn((_cmd: string, _ui: boolean, text: string) => {
+      dec.value = text;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true });
+    try {
+      const changes: Event[] = [];
+      dec.addEventListener('change', (e) => changes.push(e));
+      paste(dec, '12,5 m²');
+      dec.dispatchEvent(new Event('blur'));
+      expect(exec).toHaveBeenCalledWith('insertText', false, '12,5');
+      expect(dec.value).toBe('12,5');
+      expect(changes.length).toBe(0);
+    } finally {
+      delete (document as unknown as Record<string, unknown>)['execCommand'];
+    }
+  });
+
+  it('composition interrompue : la sortie du champ réactive le filtrage', () => {
+    const { int } = setup();
+    int.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    int.dispatchEvent(new Event('blur'));
+    int.value = 'x';
+    int.dispatchEvent(new Event('input'));
+    expect(int.value).toBe('');
   });
 });

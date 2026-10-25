@@ -46,12 +46,16 @@ export function parseNumeric(raw: string): number | null {
     '(compositionstart)': 'onCompositionStart()',
     '(compositionend)': 'onCompositionEnd()',
     '(paste)': 'onPaste($event)',
+    '(change)': 'onChange()',
+    '(blur)': 'onBlur()',
   },
 })
 export class NumericDirective {
   readonly appNumeric = input.required<NumericMode>();
   protected readonly inputMode = computed(() => (this.appNumeric() === 'integer' ? 'numeric' : 'decimal'));
   private composing = false;
+  /** Valeur avant un collage écrit « à la main » : aucun `change` natif ne suivra à la sortie du champ. */
+  private valueBeforePaste: string | null = null;
   private readonly el = inject<ElementRef<HTMLInputElement>>(ElementRef).nativeElement;
 
   /** Refuse un caractère interdit, ou un second séparateur, avant son insertion. */
@@ -91,7 +95,39 @@ export class NumericDirective {
     const { value, selectionStart, selectionEnd } = this.el;
     const start = selectionStart ?? value.length;
     const end = selectionEnd ?? value.length;
-    this.apply(value.slice(0, start) + pasted + value.slice(end), start + pasted.length);
+    const raw = value.slice(0, start) + pasted + value.slice(end);
+    const mode = this.appNumeric();
+    const clean = sanitizeNumeric(raw, mode);
+    const position = Math.min(sanitizeNumeric(raw.slice(0, start + pasted.length), mode).length, clean.length);
+    // Saisie utilisateur native : `input` et `change` partent d'eux-mêmes et l'annulation reste possible.
+    if (this.insertNatively(clean)) {
+      this.el.setSelectionRange(position, position);
+      return;
+    }
+    this.valueBeforePaste ??= value;
+    this.apply(raw, start + pasted.length);
+  }
+
+  /** Les formulaires reçoivent le `change` natif : plus rien à rattraper. */
+  protected onChange(): void {
+    this.valueBeforePaste = null;
+  }
+
+  /** Sortie du champ : rattrape le `change` qu'un collage écrit en code n'a pas déclenché. */
+  protected onBlur(): void {
+    this.composing = false; // `compositionend` peut ne jamais arriver
+    const before = this.valueBeforePaste;
+    this.valueBeforePaste = null;
+    if (before !== null && before !== this.el.value) {
+      this.el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  /** Remplace tout le contenu par `text` comme le ferait l'utilisateur ; `false` si le navigateur ne sait pas. */
+  private insertNatively(text: string): boolean {
+    if (typeof document.execCommand !== 'function') return false;
+    this.el.select();
+    return document.execCommand('insertText', false, text);
   }
 
   /**
