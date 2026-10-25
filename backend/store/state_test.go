@@ -206,3 +206,174 @@ func TestStateIncludesHiddenRooms(t *testing.T) {
 	}
 	t.Error("la pièce masquée doit rester dans l'état")
 }
+
+const devC = "cccccccc-0000-4000-8000-000000000003"
+
+func photoRec(id string, room *string, device string) store.PhotoRecord {
+	return store.PhotoRecord{ID: id, VisitCode: stateCode, RoomID: room, DeviceID: device,
+		TakenAt: time.Date(2026, 10, 25, 14, 35, 20, 0, time.FixedZone("", 2*3600)),
+		Path:    "maison-test/" + id + ".jpg", Size: 1234}
+}
+
+func TestAddPhotoIdempotent(t *testing.T) {
+	s := newStateStore(t)
+	ctx := context.Background()
+	rec := photoRec("11111111-0000-4000-8000-000000000001", nil, devA)
+	created, err := s.AddPhoto(ctx, rec)
+	if err != nil || !created {
+		t.Fatalf("premier ajout : %v %v", created, err)
+	}
+	seq := mustState(t, s, devA, 0).Seq
+	created, err = s.AddPhoto(ctx, rec)
+	if err != nil || created {
+		t.Fatalf("second ajout : %v %v", created, err)
+	}
+	st := mustState(t, s, devA, 0)
+	if st.Seq != seq || len(st.Photos) != 1 {
+		t.Errorf("seq %d -> %d, photos %d", seq, st.Seq, len(st.Photos))
+	}
+	if st.Photos[0].TakenAt != "2026-10-25T14:35:20+02:00" {
+		t.Errorf("taken_at = %q (le décalage du téléphone doit être conservé)", st.Photos[0].TakenAt)
+	}
+	p, err := s.PhotoPathByID(ctx, stateCode, rec.ID)
+	if err != nil || p != rec.Path {
+		t.Errorf("PhotoPathByID = %q, %v", p, err)
+	}
+	if _, err := s.PhotoPathByID(ctx, stateCode, "inconnue"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("photo inconnue : %v", err)
+	}
+	if _, err := s.PhotoPathByID(ctx, "autre", rec.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("mauvaise visite : %v", err)
+	}
+}
+
+func TestAddPhotoErrors(t *testing.T) {
+	s := newStateStore(t)
+	ctx := context.Background()
+	bad := "nope"
+	if _, err := s.AddPhoto(ctx, photoRec("p1", &bad, devA)); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("pièce inconnue : %v", err)
+	}
+	rec := photoRec("p2", nil, devA)
+	rec.VisitCode = "inconnue"
+	if _, err := s.AddPhoto(ctx, rec); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("visite inconnue : %v", err)
+	}
+	// Pièce d'une autre visite.
+	if err := s.CreateVisit(ctx, "autre-visite", model.Fiche{Address: "x"}, devA, stateNow); err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.State(ctx, "autre-visite", devA, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := other.Rooms[0].ID
+	if _, err := s.AddPhoto(ctx, photoRec("p3", &foreign, devA)); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("pièce d'une autre visite : %v", err)
+	}
+}
+
+func TestAddPhotoClosedVisit(t *testing.T) {
+	s := newStateStore(t)
+	mustApply(t, s, devA, stateOp("c1", ops.TypeCloseVisit, 1, map[string]any{}))
+	if _, err := s.AddPhoto(context.Background(), photoRec("p1", nil, devA)); !errors.Is(err, store.ErrClosed) {
+		t.Errorf("visite clôturée : %v", err)
+	}
+}
+
+func TestRoomDirName(t *testing.T) {
+	s := newStateStore(t)
+	ctx := context.Background()
+	r := mustState(t, s, devA, 0).Rooms[0]
+	got, err := s.RoomDirName(ctx, stateCode, r.ID)
+	if err != nil || got != r.DirName {
+		t.Errorf("RoomDirName = %q, %v (veut %q)", got, err, r.DirName)
+	}
+	if _, err := s.RoomDirName(ctx, "autre", r.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("mauvaise visite : %v", err)
+	}
+	if _, err := s.RoomDirName(ctx, stateCode, "nope"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("pièce inconnue : %v", err)
+	}
+}
+
+func TestStateListsPhotos(t *testing.T) {
+	s := newStateStore(t)
+	ctx := context.Background()
+	room := mustState(t, s, devA, 0).Rooms[0].ID
+	if _, err := s.AddPhoto(ctx, photoRec("ph-room", &room, devA)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddPhoto(ctx, photoRec("ph-global", nil, devB)); err != nil {
+		t.Fatal(err)
+	}
+	got := mustState(t, s, devA, 0).Photos
+	if len(got) != 2 {
+		t.Fatalf("photos = %+v", got)
+	}
+	if got[0].ID != "ph-room" || got[0].RoomID == nil || *got[0].RoomID != room || got[0].Author != 1 {
+		t.Errorf("photo de pièce = %+v", got[0])
+	}
+	if got[1].ID != "ph-global" || got[1].RoomID != nil || got[1].Author != 2 {
+		t.Errorf("photo globale = %+v", got[1])
+	}
+	// Les photos sont partagées : B voit les mêmes.
+	if n := len(mustState(t, s, devB, 0).Photos); n != 2 {
+		t.Errorf("photos vues par B = %d", n)
+	}
+}
+
+func TestStateIsolatedBetweenVisits(t *testing.T) {
+	s := newStateStore(t)
+	ctx := context.Background()
+	const code2 = "maison-autre"
+	if err := s.CreateVisit(ctx, code2, model.Fiche{Address: "2 rue B"}, devC, stateNow); err != nil {
+		t.Fatal(err)
+	}
+	st2, err := s.State(ctx, code2, devC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt2, room2, q2 := st2.Points[0].ID, st2.Rooms[0].ID, st2.Questions[0].ID
+	b := []ops.Op{
+		stateOp("x1", ops.TypeSetShared, 1, map[string]any{"target_id": q2, "field": "answer", "value": "secret visite 2"}),
+		stateOp("x2", ops.TypeSetRating, 1, map[string]any{"point_id": pt2, "value": 1}),
+	}
+	if res, _, err := ops.ApplyBatch(ctx, s, code2, devC, b, stateNow); err != nil || res[0].Result != ops.ResultApplied || res[1].Result != ops.ResultApplied {
+		t.Fatalf("lot visite 2 : %+v %v", res, err)
+	}
+	rec := photoRec("ph-v2", &room2, devC)
+	rec.VisitCode = code2
+	if _, err := s.AddPhoto(ctx, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	got := mustState(t, s, devA, 0)
+	if len(got.Shared) != 0 || len(got.Ratings) != 0 || len(got.Photos) != 0 {
+		t.Errorf("fuite entre visites : shared=%v ratings=%v photos=%v", got.Shared, got.Ratings, got.Photos)
+	}
+	if b, _ := json.Marshal(got); strings.Contains(string(b), "secret visite 2") || strings.Contains(string(b), room2) {
+		t.Error("données de la visite 2 dans l'état de la visite 1")
+	}
+}
+
+func TestChangesSinceMasksOthersRatings(t *testing.T) {
+	s := newStateStore(t)
+	st := mustState(t, s, devA, 0)
+	pt, room := st.Points[0].ID, st.Rooms[0].ID
+	n := mustApply(t, s, devA, stateOp("a1", ops.TypeSetRating, 1, map[string]any{"point_id": pt, "value": 3}))
+	mustApply(t, s, devB,
+		stateOp("b1", ops.TypeSetRating, 2, map[string]any{"point_id": pt, "value": 1}),
+		stateOp("b2", ops.TypeSetComment, 2, map[string]any{"room_id": room, "text": "commentaire de B"}))
+
+	ch := mustState(t, s, devA, n)
+	if ch.Seq <= n {
+		t.Fatalf("seq = %d, devrait avoir dépassé %d", ch.Seq, n)
+	}
+	if len(ch.Ratings) != 0 || len(ch.Comments) != 0 {
+		t.Errorf("fuite de B dans les changements de A : %+v %+v", ch.Ratings, ch.Comments)
+	}
+	if b, _ := json.Marshal(ch); strings.Contains(string(b), "commentaire de B") {
+		t.Error("commentaire de B dans les changements de A")
+	}
+}
