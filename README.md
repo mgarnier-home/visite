@@ -53,13 +53,22 @@ docker buildx build --platform linux/amd64 --load -t visite:dev .
 
 Le `Dockerfile` compile le front (Node), puis le binaire Go statique (`CGO_ENABLED=0`, compilation
 croisée vers `linux/amd64` ou `linux/arm64`), et produit une image Alpine minimale qui s'exécute
-avec un utilisateur non root. Les arguments `VERSION`, `COMMIT` et `DATE` renseignent
-`/version`. Les images de base sont épinglées par version et par empreinte.
+avec un utilisateur non root, `visite`, d'uid et de gid fixes `10001`. Les arguments `VERSION`,
+`COMMIT` et `DATE` renseignent `/version`. Les images de base sont épinglées par version et par
+empreinte. Le contrôle de santé interroge `/version` sur le port `VISITE_SERVER_PORT` (8080 par
+défaut).
 
-Essai local :
+Essai local, avec un volume nommé (initialisé par l'image, donc déjà à l'uid 10001) :
 
 ```sh
-docker run --rm -p 8099:8080 -v "$(mktemp -d)":/data visite:dev
+docker run --rm -p 8099:8080 -v visite-data:/data visite:dev
+```
+
+Avec un dossier de l'hôte, celui-ci doit être accessible en écriture par l'uid 10001 :
+
+```sh
+mkdir -p data && sudo chown 10001:10001 data
+docker run --rm -p 8099:8080 -v "$PWD/data":/data visite:dev
 ```
 
 ## Emplacement des données

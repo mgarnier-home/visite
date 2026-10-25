@@ -24,16 +24,18 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
 
 # Étape 3 : image finale
 FROM docker.io/library/alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
-RUN addgroup -S visite && adduser -S -G visite -H -h /data visite \
+# uid et gid fixes (10001) : un dossier monté sur /data doit appartenir à 10001:10001.
+RUN addgroup -S -g 10001 visite && adduser -S -u 10001 -G visite -H -h /data visite \
     && mkdir -p /data/photos \
     && chown -R visite:visite /data
 COPY --from=back /out/visite /usr/local/bin/visite
 ENV VISITE_DB_PATH=/data/visite.db \
     VISITE_PHOTOS_DIR=/data/photos
-USER visite
+USER 10001:10001
 WORKDIR /data
 VOLUME /data
 EXPOSE 8080
+# Le port suit VISITE_SERVER_PORT (8080 par défaut), d'où le passage par sh -c.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:8080/version || exit 1
+    CMD ["sh", "-c", "wget -qO- \"http://localhost:${VISITE_SERVER_PORT:-8080}/version\" > /dev/null || exit 1"]
 ENTRYPOINT ["/usr/local/bin/visite"]
