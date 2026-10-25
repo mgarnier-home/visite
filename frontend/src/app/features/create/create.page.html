@@ -119,6 +119,27 @@
       <input matInput type="email" autocomplete="off" autocapitalize="none" [formControl]="form.agent_email" />
     </mat-form-field>
 
+    <section class="rooms" aria-labelledby="rooms-title">
+      <h2 id="rooms-title">Pièces de la maison</h2>
+      @switch (templateStatus()) {
+        @case ('loading') {
+          <p class="status">Chargement des pièces…</p>
+        }
+        @case ('failed') {
+          <p class="status">Impossible de charger les pièces : toutes seront créées</p>
+        }
+        @default {
+          @for (r of rooms(); track r.id) {
+            <mat-checkbox
+              data-test="room-option"
+              [checked]="isRoomIncluded(r.id)"
+              (change)="toggleRoom(r.id, $event.checked)"
+            >{{ r.name }}</mat-checkbox>
+          }
+        }
+      }
+    </section>
+
     @if (error()) {
       <p class="status ko" role="alert">{{ error() }}</p>
     }

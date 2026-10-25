@@ -240,7 +240,7 @@ export class TemplatePage implements OnInit {
   protected addQuestion(si: number): void {
     this.edit((t) => {
       const questions = t.sections[si].questions;
-      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length });
+      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length, important: false });
     });
   }
 

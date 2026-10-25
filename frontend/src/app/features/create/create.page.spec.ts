@@ -2,13 +2,28 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
-import { VisitState } from '../../core/api.types';
+import { Template, VisitState } from '../../core/api.types';
 import { LocalStore } from '../../core/local-store';
 import { provideAppIcons } from '../../shared/icons';
 import { CreatePage } from './create.page';
 
+const section = (id: string, name: string, kind: Template['sections'][number]['kind'], position: number) => ({
+  id, name, kind, position, points: [], questions: [],
+});
+const TEMPLATE: Template = {
+  version: 1,
+  packing_list: '',
+  sections: [
+    section('s-gen', 'Questions générales', 'topic', 0),
+    section('s-salon', 'Salon', 'room', 1),
+    section('s-garage', 'Garage', 'room', 2),
+    section('s-ch', 'Chambre', 'per_bedroom', 3),
+    section('s-bilan', 'Bilan', 'summary', 4),
+  ],
+};
+
 describe('CreatePage', () => {
-  const api = { exists: vi.fn(), create: vi.fn(), state: vi.fn(), join: vi.fn() };
+  const api = { exists: vi.fn(), create: vi.fn(), state: vi.fn(), join: vi.fn(), getTemplate: vi.fn() };
   const store = { saveState: vi.fn() };
   const navigate = vi.fn();
 
@@ -16,6 +31,7 @@ describe('CreatePage', () => {
     vi.useFakeTimers();
     vi.resetAllMocks();
     api.exists.mockResolvedValue({ exists: false });
+    api.getTemplate.mockResolvedValue(TEMPLATE);
     TestBed.configureTestingModule({
       imports: [CreatePage],
       providers: [
@@ -252,4 +268,77 @@ describe('CreatePage', () => {
     expect(area.getAttribute('inputmode')).toBe('decimal');
   });
 
+  describe('pièces de la maison', () => {
+    async function ready() {
+      const ctx = setup();
+      type(ctx.el, '[data-test=address]', '12 rue des Lilas');
+      type(ctx.el, '[data-test=code]', 'maison-x');
+      await settle(ctx.fixture, 300);
+      return ctx;
+    }
+    const boxes = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>('[data-test=room-option]'));
+    const input = (box: HTMLElement) => box.querySelector('input') as HTMLInputElement;
+
+    it('liste uniquement les sections room, dans l\'ordre du modèle, toutes cochées', async () => {
+      const { el } = await ready();
+      const items = boxes(el);
+      expect(items.map((b) => b.textContent?.trim())).toEqual(['Salon', 'Garage']);
+      expect(items.every((b) => input(b).checked)).toBe(true);
+    });
+
+    it('affiche une ligne de chargement tant que le modèle n\'est pas arrivé', () => {
+      api.getTemplate.mockReturnValue(new Promise(() => {}));
+      const { el } = setup();
+      expect(el.textContent).toContain('Chargement des pièces…');
+    });
+
+    it('décocher Garage envoie son identifiant dans excluded_section_ids', async () => {
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, el, submit } = await ready();
+      input(boxes(el)[1]).click();
+      await settle(fixture);
+      submit().click();
+      await settle(fixture);
+      expect(api.create.mock.calls[0][0].excluded_section_ids).toEqual(['s-garage']);
+    });
+
+    it('tout coché envoie une liste vide', async () => {
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, submit } = await ready();
+      submit().click();
+      await settle(fixture);
+      expect(api.create.mock.calls[0][0].excluded_section_ids).toEqual([]);
+    });
+
+    it('envoi avant la fin du chargement : excluded_section_ids omis', async () => {
+      api.getTemplate.mockReturnValue(new Promise(() => {}));
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, submit } = await ready();
+      expect(submit().disabled).toBe(false);
+      submit().click();
+      await settle(fixture);
+      expect('excluded_section_ids' in api.create.mock.calls[0][0]).toBe(false);
+    });
+
+    it('échec du chargement : message affiché, création possible sans le champ', async () => {
+      api.getTemplate.mockRejectedValue(new ApiError(0, 'réseau'));
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, el, submit } = await ready();
+      expect(el.textContent).toContain('Impossible de charger les pièces : toutes seront créées');
+      expect(boxes(el)).toHaveLength(0);
+      submit().click();
+      await settle(fixture);
+      expect('excluded_section_ids' in api.create.mock.calls[0][0]).toBe(false);
+    });
+
+    it('400 « sections exclues invalides » : message du serveur et rechargement du modèle', async () => {
+      api.create.mockRejectedValue(new ApiError(400, 'sections exclues invalides'));
+      const { fixture, el, submit } = await ready();
+      expect(api.getTemplate).toHaveBeenCalledTimes(1);
+      submit().click();
+      await settle(fixture);
+      expect(el.textContent).toContain('sections exclues invalides');
+      expect(api.getTemplate).toHaveBeenCalledTimes(2);
+    });
+  });
 });

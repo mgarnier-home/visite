@@ -35,3 +35,14 @@ mat-form-field {
   min-height: 48px;
   margin-top: 8px;
 }
+
+.rooms {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+
+  h2 {
+    margin: 0 0 4px;
+    font: var(--mat-sys-title-medium);
+  }
+}

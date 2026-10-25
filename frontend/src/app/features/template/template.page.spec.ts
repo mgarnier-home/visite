@@ -19,7 +19,7 @@ const makeTemplate = (version = 3): Template => ({
     {
       id: 's1', name: 'Cuisine', kind: 'room', position: 0,
       points: [{ id: 'p1', label: 'Hotte', type: 'note', options: [], weight: 1, position: 0 }],
-      questions: [{ id: 'q1', text: 'Année ?', position: 0 }],
+      questions: [{ id: 'q1', text: 'Année ?', position: 0, important: false }],
     },
     { id: 's2', name: 'Salon', kind: 'room', position: 1, points: [], questions: [] },
     { id: 's3', name: 'Jardin', kind: 'topic', position: 2, points: [], questions: [] },
