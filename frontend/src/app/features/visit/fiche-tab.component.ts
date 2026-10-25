@@ -101,7 +101,8 @@ export class FicheTabComponent {
     if (typeof v !== 'string' || v === '') return null;
     if (field.kind === 'tel') return `tel:${v}`;
     if (field.kind === 'email') return `mailto:${v}`;
-    if (field.kind === 'url') return v;
+    // sans schéma http(s), le lien serait relatif à l'application : on préfixe https://
+    if (field.kind === 'url') return /^https?:\/\//i.test(v) ? v : `https://${v}`;
     return null;
   }
 

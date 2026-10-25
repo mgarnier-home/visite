@@ -72,6 +72,19 @@ describe('FicheTabComponent', () => {
     expect(link.getAttribute('rel')).toContain('noopener');
   });
 
+  it('annonce sans schéma : lien en https://, texte affiché inchangé', () => {
+    const { el } = setup(makeState({ creator: false }, { listing_url: 'exemple.fr/annonce' }));
+    const link = el.querySelector('[data-field=listing_url] a')!;
+    expect(link.getAttribute('href')).toBe('https://exemple.fr/annonce');
+    expect(link.textContent?.trim()).toBe('exemple.fr/annonce');
+    const { el: el2 } = setup(makeState({}, { listing_url: 'www.exemple.fr' }));
+    expect(Array.from(el2.querySelectorAll('.links a')).map((a) => a.getAttribute('href'))).toContain(
+      'https://www.exemple.fr',
+    );
+    const { el: el3 } = setup(makeState({ creator: false }, { listing_url: 'http://exemple.fr' }));
+    expect(el3.querySelector('[data-field=listing_url] a')!.getAttribute('href')).toBe('http://exemple.fr');
+  });
+
   it('champs calculés : prix au m², frais de notaire, âge, prix réel', () => {
     const { el } = setup(makeState({ creator: false }));
     const norm = (sel: string) => text(el, sel)!.replace(/\s/g, ' ');
