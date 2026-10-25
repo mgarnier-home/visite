@@ -67,14 +67,14 @@ func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, cre
 		if sec.Kind == model.KindPerBedroom {
 			for i := 1; i <= bedrooms; i++ {
 				name := sec.Name + " " + strconv.Itoa(i)
-				if err := copySection(tx, code, sec, uuid.NewString(), name, position, seq); err != nil {
+				if err := copySection(tx, code, sec, uuid.NewString(), name, position, seq, ""); err != nil {
 					return err
 				}
 				position++
 			}
 			continue
 		}
-		if err := copySection(tx, code, sec, uuid.NewString(), sec.Name, position, seq); err != nil {
+		if err := copySection(tx, code, sec, uuid.NewString(), sec.Name, position, seq, ""); err != nil {
 			return err
 		}
 		position++

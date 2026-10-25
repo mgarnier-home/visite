@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/mgarnier-home/visite/model"
 	"github.com/mgarnier-home/visite/store"
 )
@@ -233,6 +235,7 @@ func (a *applier) addRoom() error {
 		ID            string  `json:"id"`
 		Name          string  `json:"name"`
 		FromSectionID *string `json:"from_section_id"`
+		NotePointID   string  `json:"note_point_id"`
 	}
 	if err := a.decode(&p); err != nil {
 		return err
@@ -244,14 +247,23 @@ func (a *applier) addRoom() error {
 	if err := a.newID(p.ID); err != nil {
 		return err
 	}
+	if p.NotePointID != "" {
+		// Id choisi par le client : UUID valide, distinct de la pièce, encore inutilisé.
+		if _, err := uuid.Parse(p.NotePointID); err != nil || p.NotePointID == p.ID {
+			return reject(ReasonInvalid)
+		}
+		if err := a.newID(p.NotePointID); err != nil {
+			return err
+		}
+	}
 	seq, err := a.tx.NextSeq(a.code)
 	if err != nil {
 		return err
 	}
 	if p.FromSectionID == nil || *p.FromSectionID == "" {
-		return a.tx.InsertRoom(a.code, p.ID, name, seq)
+		return a.tx.InsertRoom(a.code, p.ID, name, seq, p.NotePointID)
 	}
-	err = a.tx.CopySectionAsRoom(a.code, p.ID, name, *p.FromSectionID, seq)
+	err = a.tx.CopySectionAsRoom(a.code, p.ID, name, *p.FromSectionID, seq, p.NotePointID)
 	if errors.Is(err, store.ErrNotFound) {
 		return reject(ReasonNotFound)
 	}

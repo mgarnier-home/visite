@@ -180,19 +180,20 @@ func (t *Tx) nextRoomPosition(code string) (int, error) {
 	return pos, err
 }
 
-// InsertRoom ajoute en dernière position une pièce vide de kind room, avec sa note globale.
-func (t *Tx) InsertRoom(code, roomID, name string, seq int64) error {
+// InsertRoom ajoute en dernière position une pièce vide de kind room, avec sa note globale
+// (d'id notePointID, ou généré si vide).
+func (t *Tx) InsertRoom(code, roomID, name string, seq int64, notePointID string) error {
 	pos, err := t.nextRoomPosition(code)
 	if err != nil {
 		return err
 	}
 	sec := model.TemplateSection{Kind: model.KindRoom}
-	return copySection(t.tx, code, sec, roomID, name, pos, seq)
+	return copySection(t.tx, code, sec, roomID, name, pos, seq, notePointID)
 }
 
 // CopySectionAsRoom ajoute en dernière position une pièce copiée de la section sectionID
-// du modèle courant ; ErrNotFound si la section n'existe pas.
-func (t *Tx) CopySectionAsRoom(code, roomID, name, sectionID string, seq int64) error {
+// du modèle courant ; ErrNotFound si la section n'existe pas. notePointID : voir InsertRoom.
+func (t *Tx) CopySectionAsRoom(code, roomID, name, sectionID string, seq int64, notePointID string) error {
 	tpl, err := readTemplate(t.ctx, t.tx)
 	if err != nil {
 		return err
@@ -205,7 +206,7 @@ func (t *Tx) CopySectionAsRoom(code, roomID, name, sectionID string, seq int64) 
 		if err != nil {
 			return err
 		}
-		return copySection(t.tx, code, sec, roomID, name, pos, seq)
+		return copySection(t.tx, code, sec, roomID, name, pos, seq, notePointID)
 	}
 	return ErrNotFound
 }

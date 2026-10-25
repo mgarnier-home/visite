@@ -33,8 +33,9 @@ func uniqueDirName(tx *sql.Tx, code, base string) (string, error) {
 
 // copySection crée la pièce roomID d'après la section du modèle : la pièce elle-même,
 // la note globale (sections room et per_bedroom), puis les points et questions copiés.
-// Toutes les lignes insérées portent seq.
-func copySection(tx *sql.Tx, code string, sec model.TemplateSection, roomID, name string, position int, seq int64) error {
+// Toutes les lignes insérées portent seq. notePointID impose l'id de la note globale
+// (« » : id généré).
+func copySection(tx *sql.Tx, code string, sec model.TemplateSection, roomID, name string, position int, seq int64, notePointID string) error {
 	dir, err := uniqueDirName(tx, code, model.Slugify(name))
 	if err != nil {
 		return err
@@ -46,12 +47,15 @@ func copySection(tx *sql.Tx, code string, sec model.TemplateSection, roomID, nam
 		return fmt.Errorf("pièce %q: %w", name, err)
 	}
 
+	if notePointID == "" {
+		notePointID = uuid.NewString()
+	}
 	offset := 0
 	if sec.Kind == model.KindRoom || sec.Kind == model.KindPerBedroom {
 		if _, err := tx.Exec(
 			`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, seq)
 			 VALUES (?, ?, ?, ?, '[]', 1, 0, ?)`,
-			uuid.NewString(), roomID, globalNoteLabel, string(model.TypeNote), seq); err != nil {
+			notePointID, roomID, globalNoteLabel, string(model.TypeNote), seq); err != nil {
 			return err
 		}
 		offset = 1

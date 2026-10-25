@@ -796,3 +796,82 @@ func TestUnknownVisit(t *testing.T) {
 		}
 	}
 }
+
+func TestAddRoomNotePointID(t *testing.T) {
+	notePoint := func(e *env, roomID string) string {
+		return e.queryString(`SELECT id FROM visit_points WHERE room_id = ? AND position = 0`, roomID)
+	}
+
+	t.Run("pièce vide, note évaluable dans le même lot", func(t *testing.T) {
+		e := newEnv(t)
+		room, note := uuid.NewString(), uuid.NewString()
+		res, _ := e.apply(devB,
+			op("add_room", 100, map[string]any{"id": room, "name": "Cuisine", "note_point_id": note}),
+			op("set_rating", 101, map[string]any{"point_id": note, "value": 4}),
+		)
+		for i, r := range res {
+			if got := outcome(r); got != "applied" {
+				t.Fatalf("op %d : %s, veut applied", i, got)
+			}
+		}
+		if got := notePoint(e, room); got != note {
+			t.Errorf("note globale = %q, veut %q", got, note)
+		}
+		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, room); n != 1 {
+			t.Errorf("%d points, veut 1", n)
+		}
+	})
+
+	t.Run("copie de section", func(t *testing.T) {
+		e := newEnv(t)
+		room, note := uuid.NewString(), uuid.NewString()
+		res, _ := e.apply(devB,
+			op("add_room", 100, map[string]any{"id": room, "name": "Salle de bain", "from_section_id": "sec-salle-de-bain", "note_point_id": note}),
+			op("set_rating", 101, map[string]any{"point_id": note, "value": 3}),
+		)
+		for i, r := range res {
+			if got := outcome(r); got != "applied" {
+				t.Fatalf("op %d : %s, veut applied", i, got)
+			}
+		}
+		if got := notePoint(e, room); got != note {
+			t.Errorf("note globale = %q, veut %q", got, note)
+		}
+		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, room); n != 9 {
+			t.Errorf("%d points, veut 9", n)
+		}
+		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ? AND id = ?`, room, note); n != 1 {
+			t.Errorf("l'id imposé est utilisé %d fois", n)
+		}
+	})
+
+	t.Run("invalide", func(t *testing.T) {
+		e := newEnv(t)
+		room := uuid.NewString()
+		cases := map[string]string{
+			"pas un UUID":      "pas-un-uuid",
+			"id déjà un point": e.pointOfType(e.code, "note"),
+			"id de la pièce":   room,
+		}
+		for name, note := range cases {
+			got := e.applyOne(devB, op("add_room", 100, map[string]any{"id": room, "name": "Cuisine", "note_point_id": note}))
+			if got != "rejected/invalid" {
+				t.Errorf("%s : %s, veut rejected/invalid", name, got)
+			}
+		}
+		if n := e.queryInt(`SELECT COUNT(*) FROM visit_rooms WHERE id = ?`, room); n != 0 {
+			t.Error("pièce créée malgré le rejet")
+		}
+	})
+
+	t.Run("absent", func(t *testing.T) {
+		e := newEnv(t)
+		room := uuid.NewString()
+		if got := e.applyOne(devB, op("add_room", 100, map[string]any{"id": room, "name": "Cuisine"})); got != "applied" {
+			t.Fatalf("add_room : %s", got)
+		}
+		if _, err := uuid.Parse(notePoint(e, room)); err != nil {
+			t.Errorf("id généré invalide : %v", err)
+		}
+	})
+}
