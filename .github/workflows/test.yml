@@ -1,0 +1,119 @@
+name: Tests
+
+# Lancé sur chaque pull request vers main et sur chaque push sur main (ce qui détecte une fusion
+# cassée). La publication de l'image Docker est un workflow séparé, déclenché par un tag
+# (publish.yml).
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# Annule une exécution en cours sur la même référence dès qu'un nouveau push arrive, pour ne pas
+# gaspiller de minutes CI sur du code déjà obsolète.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  back:
+    name: Back
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v7
+
+      - name: Installation de Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Analyse statique
+        run: go vet ./...
+
+      - name: Tests
+        run: go test -race ./...
+
+  front:
+    name: Front
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v7
+
+      - name: Installation de Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Tests unitaires
+        run: npx ng test --watch=false
+
+      - name: Build
+        run: npx ng build
+
+  e2e:
+    name: Bout en bout
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v7
+
+      - name: Installation de Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Installation de Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installation de Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.53.1
+
+      - name: Installation des dépendances
+        working-directory: frontend
+        run: npm ci
+
+      - name: Installation des navigateurs Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # Construit le front et le binaire Go, puis lance les scénarios Playwright contre ce binaire.
+      - name: Tests de bout en bout
+        run: task e2e
+
+      - name: Archivage du rapport Playwright en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          # Le rapport HTML explique les échecs, et test-results/ contient les traces et captures
+          # des essais ayant échoué : les deux servent à déboguer un échec depuis la CI.
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
