@@ -197,3 +197,22 @@ func TestUnknownAPIRouteIsJSON404(t *testing.T) {
 	router := newTestRouter(t)
 	wantCode(t, do(t, router, "GET", "/api/nimporte/quoi", devA, ""), 404)
 }
+
+func TestWrongMethodIsJSON405(t *testing.T) {
+	router := newTestRouter(t)
+	createVisit(t, router, "maison-a", devA)
+	wantCode(t, do(t, router, "GET", "/api/visits/maison-a/join", devA, ""), 405)
+	wantCode(t, do(t, router, "DELETE", "/api/visits", devA, ""), 405)
+}
+
+func TestJoinClosedVisit(t *testing.T) {
+	router := newTestRouter(t)
+	createVisit(t, router, "maison-a", devA)
+	wantCode(t, do(t, router, "POST", "/api/visits/maison-a/ops", devA,
+		`{"ops":[{"op_id":"op-close","type":"close_visit","client_ts":1,"payload":{}}]}`), 200)
+	rec := do(t, router, "POST", "/api/visits/maison-a/join", devB, "")
+	wantCode(t, rec, 200)
+	if strings.TrimSpace(rec.Body.String()) != `{"number":2}` {
+		t.Fatalf("corps %s", rec.Body.String())
+	}
+}

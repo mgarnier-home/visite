@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 // maxBodyBytes est la taille maximale d'un corps JSON (1 Mo).
@@ -37,7 +39,21 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-// notFoundHandler répond 404 JSON aux routes inconnues de l'API.
-func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotFound, "route introuvable")
+// notFoundOrMethodNotAllowed répond en JSON aux requêtes qu'aucune route de l'API ne
+// traite : 405 si le chemin existe pour une autre méthode, 404 sinon. Nécessaire car
+// mux, dès qu'un sous-routeur a un NotFoundHandler, ne consulte plus son
+// MethodNotAllowedHandler.
+func notFoundOrMethodNotAllowed(api *mux.Router) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+			probe := r.Clone(r.Context())
+			probe.Method = method
+			var m mux.RouteMatch
+			if api.Match(probe, &m) && m.MatchErr == nil {
+				writeError(w, http.StatusMethodNotAllowed, "méthode non autorisée")
+				return
+			}
+		}
+		writeError(w, http.StatusNotFound, "route introuvable")
+	}
 }

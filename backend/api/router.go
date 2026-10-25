@@ -1,7 +1,7 @@
+// Package api expose le routeur HTTP de l'application.
 package api
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -44,7 +44,7 @@ func NewRouter(d Deps) *mux.Router {
 
 	api := router.PathPrefix("/api").Subrouter()
 	// Une route /api inconnue répond en JSON, pour que le repli SPA ne la capte jamais.
-	api.NotFoundHandler = http.HandlerFunc(notFoundHandler)
+	api.NotFoundHandler = notFoundOrMethodNotAllowed(api)
 	h.registerVisitRoutes(api)
 
 	return router
