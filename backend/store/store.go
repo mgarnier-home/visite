@@ -28,9 +28,11 @@ type Store struct {
 
 // Open ouvre (ou crée) la base et applique les migrations manquantes.
 // Les pragmas sont dans le DSN pour s'appliquer à chaque connexion du pool.
+// _txlock=immediate : toute transaction prend le verrou d'écriture dès BEGIN, ce qui
+// évite l'échec SQLITE_BUSY_SNAPSHOT d'une transaction qui passe de la lecture à l'écriture.
 func Open(path string) (*Store, error) {
 	dsn := "file:" + path +
-		"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+		"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("ouverture de la base: %w", err)

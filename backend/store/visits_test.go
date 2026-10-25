@@ -3,6 +3,9 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +26,13 @@ func seededStore(t *testing.T) *Store {
 		t.Fatalf("SeedTemplateIfEmpty: %v", err)
 	}
 	return s
+}
+
+func mustCreate(t *testing.T, s *Store, code string, f model.Fiche, device string, now time.Time) {
+	t.Helper()
+	if err := s.CreateVisit(context.Background(), code, f, device, now); err != nil {
+		t.Fatalf("CreateVisit(%s): %v", code, err)
+	}
 }
 
 func ficheWithBedrooms(n *int) model.Fiche {
@@ -82,7 +92,10 @@ func listPoints(t *testing.T, s *Store, roomID string) []pointRow {
 func TestCreateVisitCopiesTemplate(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
+	tpl, err := s.GetTemplate(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	three := 3
 	if err := s.CreateVisit(ctx, "maison-1", ficheWithBedrooms(&three), "dev-1", testNow); err != nil {
 		t.Fatalf("CreateVisit: %v", err)
@@ -149,7 +162,9 @@ func TestCreateVisitCopiesTemplate(t *testing.T) {
 			}
 		}
 		var nq int
-		s.db.QueryRow(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ?`, cuisine.id).Scan(&nq)
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ?`, cuisine.id).Scan(&nq); err != nil {
+			t.Fatal(err)
+		}
 		if nq != len(sec.Questions) {
 			t.Errorf("cuisine: %d questions, veut %d", nq, len(sec.Questions))
 		}
@@ -169,7 +184,9 @@ func TestCreateVisitCopiesTemplate(t *testing.T) {
 	}
 	var addr string
 	var bed int
-	s.db.QueryRow(`SELECT address, bedrooms_count FROM visits WHERE code = ?`, "maison-1").Scan(&addr, &bed)
+	if err := s.db.QueryRow(`SELECT address, bedrooms_count FROM visits WHERE code = ?`, "maison-1").Scan(&addr, &bed); err != nil {
+		t.Fatal(err)
+	}
 	if addr != "1 rue des Lilas" || bed != 3 {
 		t.Errorf("fiche non persistée: %q %d", addr, bed)
 	}
@@ -243,7 +260,7 @@ func TestCreatorIsParticipantOne(t *testing.T) {
 func TestJoinNumbersInOrder(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	s.CreateVisit(ctx, "maison-6", ficheWithBedrooms(nil), "dev-1", testNow)
+	mustCreate(t, s, "maison-6", ficheWithBedrooms(nil), "dev-1", testNow)
 	for i, dev := range []string{"dev-2", "dev-3"} {
 		n, err := s.Join(ctx, "maison-6", dev, testNow)
 		if err != nil || n != i+2 {
@@ -255,7 +272,7 @@ func TestJoinNumbersInOrder(t *testing.T) {
 func TestJoinIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	s.CreateVisit(ctx, "maison-7", ficheWithBedrooms(nil), "dev-1", testNow)
+	mustCreate(t, s, "maison-7", ficheWithBedrooms(nil), "dev-1", testNow)
 	a, err := s.Join(ctx, "maison-7", "dev-2", testNow)
 	if err != nil {
 		t.Fatal(err)
@@ -264,12 +281,12 @@ func TestJoinIsIdempotent(t *testing.T) {
 	if err != nil || a != b {
 		t.Fatalf("Join deux fois = %d puis %d, %v", a, b, err)
 	}
-	c, _ := s.Join(ctx, "maison-7", "dev-1", testNow)
-	if c != 1 {
+	c, err := s.Join(ctx, "maison-7", "dev-1", testNow)
+	if err != nil || c != 1 {
 		t.Errorf("le créateur rejoint = %d, veut 1", c)
 	}
-	if n, _ := s.Join(ctx, "maison-7", "dev-3", testNow); n != 3 {
-		t.Errorf("troisième appareil = %d, veut 3", n)
+	if n, err := s.Join(ctx, "maison-7", "dev-3", testNow); err != nil || n != 3 {
+		t.Errorf("troisième appareil = %d, %v, veut 3", n, err)
 	}
 }
 
@@ -283,16 +300,21 @@ func TestJoinUnknownVisit(t *testing.T) {
 func TestTemplateChangeDoesNotAffectVisit(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	s.CreateVisit(ctx, "maison-8", ficheWithBedrooms(nil), "dev-1", testNow)
+	mustCreate(t, s, "maison-8", ficheWithBedrooms(nil), "dev-1", testNow)
 	count := func() int {
 		var n int
-		s.db.QueryRow(`SELECT COUNT(*) FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id
-			WHERE r.visit_code = ?`, "maison-8").Scan(&n)
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id
+			WHERE r.visit_code = ?`, "maison-8").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
 		return n
 	}
 	before := count()
 
-	tpl, _ := s.GetTemplate(ctx)
+	tpl, err := s.GetTemplate(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tpl.Sections = tpl.Sections[:1]
 	tpl.Sections[0].Points = []model.TemplatePoint{}
 	tpl.Sections[0].Questions = []model.TemplateQuestion{}
@@ -304,8 +326,67 @@ func TestTemplateChangeDoesNotAffectVisit(t *testing.T) {
 		t.Errorf("points visite: %d avant, %d après", before, after)
 	}
 	var packing string
-	s.db.QueryRow(`SELECT packing_list FROM visits WHERE code = ?`, "maison-8").Scan(&packing)
+	if err := s.db.QueryRow(`SELECT packing_list FROM visits WHERE code = ?`, "maison-8").Scan(&packing); err != nil {
+		t.Fatal(err)
+	}
 	if packing == "autre" {
 		t.Error("packing_list de la visite modifié par le modèle")
+	}
+}
+
+func TestCreateVisitConcurrentSameCode(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	const n = 8
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = s.CreateVisit(ctx, "course", ficheWithBedrooms(nil), fmt.Sprintf("dev-%d", i), testNow)
+		}()
+	}
+	wg.Wait()
+	ok := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case !errors.Is(err, ErrConflict):
+			t.Errorf("erreur inattendue: %v", err)
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d créations réussies, veut exactement 1", ok)
+	}
+}
+
+func TestJoinConcurrentDistinctNumbers(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	mustCreate(t, s, "course-join", ficheWithBedrooms(nil), "dev-0", testNow)
+	const n = 10
+	nums := make([]int, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			nums[i], errs[i] = s.Join(ctx, "course-join", fmt.Sprintf("dev-%d", i+1), testNow)
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("Join: %v", err)
+		}
+	}
+	sort.Ints(nums)
+	for i, got := range nums {
+		if got != i+2 {
+			t.Fatalf("numéros = %v, veut 2..%d", nums, n+1)
+		}
 	}
 }

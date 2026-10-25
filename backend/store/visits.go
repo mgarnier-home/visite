@@ -89,7 +89,7 @@ func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, cre
 }
 
 func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed: visits.code")
 }
 
 // Join inscrit l'appareil à la visite et renvoie son numéro ; idempotent.
@@ -100,14 +100,11 @@ func (s *Store) Join(ctx context.Context, code, device string, now time.Time) (i
 	}
 	defer tx.Rollback()
 
-	// Écriture factice d'abord : prend le verrou d'écriture avant de calculer le numéro.
-	res, err := tx.ExecContext(ctx, `UPDATE visits SET code = code WHERE code = ?`, code)
-	if err != nil {
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM visits WHERE code = ?`, code).Scan(&exists); err != nil {
 		return 0, err
 	}
-	if n, err := res.RowsAffected(); err != nil {
-		return 0, err
-	} else if n == 0 {
+	if exists == 0 {
 		return 0, ErrNotFound
 	}
 
