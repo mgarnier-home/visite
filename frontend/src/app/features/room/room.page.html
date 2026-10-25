@@ -91,6 +91,9 @@
               (input)="onInput(answerKey(q.question.id), $event)"
               (blur)="onBlur(answerKey(q.question.id), $event)"
             ></textarea>
+            @if (q.answerAuthor !== undefined) {
+              <span class="author" data-test="answer-author">P{{ q.answerAuthor }}</span>
+            }
           </article>
         }
       </div>

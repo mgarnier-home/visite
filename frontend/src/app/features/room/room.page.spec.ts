@@ -105,6 +105,16 @@ describe('RoomPage', () => {
     expect(q<HTMLInputElement>(el, '[data-test=area]').value).toBe('20');
   });
 
+  it('affiche l\'auteur d\'une réponse partagée, rien pour une réponse vide', async () => {
+    const { fixture, el } = await setup();
+    expect(q(el, '.question [data-test=answer-author]').textContent?.trim()).toBe('P2');
+    const s = makeState();
+    s.shared[0] = { ...s.shared[0], value: '' };
+    state.set(s);
+    await settle(fixture);
+    expect(el.querySelector('.question [data-test=answer-author]')).toBeNull();
+  });
+
   it('un clic sur un bouton de note dispatche set_rating ; une case dispatche set_shared value', async () => {
     const { el } = await setup();
     const cards = el.querySelectorAll('app-point-card');

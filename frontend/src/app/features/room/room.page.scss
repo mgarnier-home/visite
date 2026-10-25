@@ -89,6 +89,11 @@
     color: var(--mat-sys-on-surface-variant);
   }
 
+  .author {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
   textarea {
     box-sizing: border-box;
     width: 100%;

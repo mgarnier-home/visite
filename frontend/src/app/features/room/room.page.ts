@@ -92,16 +92,19 @@ export class RoomPage {
     const s = this.state();
     const id = this.roomId();
     if (!s) return [];
-    const { values } = this.sharedByTarget();
+    const { values, authors } = this.sharedByTarget();
     return s.questions
       .filter((q) => q.room_id === id)
       .sort((a, b) => a.position - b.position)
       .map((question) => {
         const shared = values.get(question.id) ?? {};
+        const answer = typeof shared['answer'] === 'string' ? shared['answer'] : '';
         return {
           question,
           asked: shared['asked'] === true,
-          answer: typeof shared['answer'] === 'string' ? shared['answer'] : '',
+          answer,
+          // auteur de la réponse partagée (« P2 »), seulement si elle n'est pas vide
+          answerAuthor: answer === '' ? undefined : authors.get(question.id)?.['answer'],
         };
       });
   });
