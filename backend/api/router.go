@@ -2,6 +2,7 @@
 package api
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -19,6 +20,8 @@ type Deps struct {
 	Now    func() time.Time
 	Store  *store.Store
 	Photos photos.Store
+	// Web sert le frontend ; monté en dernier, uniquement s'il est non nil.
+	Web http.Handler
 }
 
 // handlers porte les dépendances partagées par les gestionnaires de l'API.
@@ -52,6 +55,11 @@ func NewRouter(d Deps) *mux.Router {
 	h.registerPhotoRoutes(api)
 	h.registerExportRoutes(api)
 	h.registerTemplateRoutes(api)
+
+	// Le repli SPA est monté en dernier : /api et /version restent prioritaires.
+	if d.Web != nil {
+		router.PathPrefix("/").Handler(d.Web)
+	}
 
 	return router
 }

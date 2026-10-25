@@ -14,6 +14,7 @@ import (
 	"github.com/mgarnier-home/visite/photos"
 	"github.com/mgarnier-home/visite/seed"
 	"github.com/mgarnier-home/visite/store"
+	"github.com/mgarnier-home/visite/web"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 		for _, err := range errs {
 			log.Errorf("configuration invalide : %v", err)
 		}
-		panic("configuration invalide")
+		os.Exit(1)
 	}
 
 	st, err := store.Open(cfg.DBPath)
@@ -44,12 +45,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st, Photos: photos.FS{Root: cfg.PhotosDir}})
+	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st, Photos: photos.FS{Root: cfg.PhotosDir}, Web: web.Handler()})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Infof("écoute sur %s", addr)
 
 	if err := http.ListenAndServe(addr, router); err != nil {
 		log.Errorf("arrêt du serveur : %v", err)
+		st.Close()
+		os.Exit(1)
 	}
 }

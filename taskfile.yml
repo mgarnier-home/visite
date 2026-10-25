@@ -10,9 +10,28 @@ tasks:
       DATE: '{{default "undefined" .DATE}}'
     cmds:
       - go build -ldflags="-X 'github.com/mgarnier-home/utils/buildinfo.Version={{.VERSION}}' -X 'github.com/mgarnier-home/utils/buildinfo.Commit={{.COMMIT}}' -X 'github.com/mgarnier-home/utils/buildinfo.Date={{.DATE}}'" -o ../bin/visite .
+  build:front:
+    cmds:
+      - |
+        if [ ! -d frontend ]; then
+          echo "frontend/ absent : build du front ignoré"
+          exit 0
+        fi
+        cd frontend
+        [ -d node_modules ] || npm ci
+        npx ng build
+        cd ..
+        find backend/web/dist -mindepth 1 ! -name .gitkeep -delete
+        cp -r frontend/dist/frontend/browser/. backend/web/dist/
   build:
     cmds:
+      - task: build:front
       - task: build:back
+  run:
+    deps: [build]
+    cmds:
+      - mkdir -p data/photos
+      - VISITE_DB_PATH="$PWD/data/visite.db" VISITE_PHOTOS_DIR="$PWD/data/photos" ./bin/visite
   test:
     dir: ./backend
     cmds:
