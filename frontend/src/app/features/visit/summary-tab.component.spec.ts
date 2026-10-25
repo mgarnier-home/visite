@@ -50,7 +50,8 @@ function makeState(over: { creator?: boolean; closed?: boolean; unasked?: boolea
 
 describe('SummaryTabComponent', () => {
   const state = signal<VisitState | null>(null);
-  const sync = { state, dispatch: vi.fn() };
+  const status = signal({ online: true, pendingOps: 0, pendingPhotos: 0, error: null as string | null });
+  const sync = { state, status, dispatch: vi.fn(), kick: vi.fn(), whenIdle: vi.fn() };
   const api = { exportCsv: vi.fn() };
   const snack = { open: vi.fn() };
   const dialog = { open: vi.fn() };
@@ -71,6 +72,8 @@ describe('SummaryTabComponent', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     sync.dispatch.mockResolvedValue(undefined);
+    sync.whenIdle.mockResolvedValue(undefined);
+    status.set({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
     dialog.open.mockReturnValue({ afterClosed: () => of(true) });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     TestBed.configureTestingModule({
@@ -151,21 +154,92 @@ describe('SummaryTabComponent', () => {
     expect(snack.open).toHaveBeenCalledWith('Copie impossible', 'OK', expect.anything());
   });
 
-  it('« Exporter le CSV » télécharge <code>.csv puis révoque l\'URL', async () => {
-    api.exportCsv.mockResolvedValue(new Blob(['x']));
-    URL.createObjectURL = vi.fn(() => 'blob:csv');
-    URL.revokeObjectURL = vi.fn();
-    let downloaded = '';
-    const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      downloaded = this.download;
-    });
+  it('« Exporter le CSV » télécharge <code>.csv par un lien attaché au document, révoqué 40 s après', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      api.exportCsv.mockResolvedValue(new Blob(['x']));
+      URL.createObjectURL = vi.fn(() => 'blob:csv');
+      URL.revokeObjectURL = vi.fn();
+      let downloaded = '';
+      let attached = false;
+      let anchor: HTMLAnchorElement | null = null;
+      const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        downloaded = this.download;
+        attached = this.isConnected;
+        anchor = this;
+      });
+      const { el } = setup();
+      click(el, '[data-test=export]');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'semicolon');
+      expect(downloaded).toBe('maison-x.csv');
+      expect(attached).toBe(true);
+      expect(anchor!.isConnected).toBe(false);
+      // Firefox Android lit l'URL après le clic : la révoquer tout de suite casse le téléchargement
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(39_999);
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv');
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('avant d\'exporter, lance une synchro et attend qu\'elle se termine', async () => {
+    api.exportCsv.mockResolvedValue(new Blob(['a\tb']));
+    writeText.mockResolvedValue(undefined);
+    let idle!: () => void;
+    sync.whenIdle.mockReturnValue(new Promise<void>((r) => (idle = r)));
     const { el } = setup();
-    click(el, '[data-test=export]');
+    click(el, '[data-test=copy]');
     await flushAll();
-    expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'semicolon');
-    expect(downloaded).toBe('maison-x.csv');
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv');
-    spy.mockRestore();
+    expect(sync.kick).toHaveBeenCalled();
+    expect(api.exportCsv).not.toHaveBeenCalled();
+    idle();
+    await flushAll();
+    expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'tab');
+    expect(snack.open).toHaveBeenCalledWith('Copié dans le presse-papiers', 'OK', expect.anything());
+  });
+
+  it('modifications encore en attente après la synchro : export fait, avec un avertissement', async () => {
+    api.exportCsv.mockResolvedValue(new Blob(['a\tb']));
+    writeText.mockResolvedValue(undefined);
+    status.set({ online: false, pendingOps: 2, pendingPhotos: 0, error: null });
+    const { el } = setup();
+    click(el, '[data-test=copy]');
+    await flushAll();
+    expect(writeText).toHaveBeenCalledWith('a\tb');
+    expect(snack.open).toHaveBeenCalledWith(expect.stringContaining('Copié dans le presse-papiers'), 'OK', expect.anything());
+    expect(snack.open).toHaveBeenCalledWith(
+      expect.stringContaining('Des modifications de cet appareil ne sont pas encore envoyées'), 'OK', expect.anything(),
+    );
+  });
+
+  it('synchro trop longue : l\'attente est bornée à 10 s, puis export avec avertissement', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      api.exportCsv.mockResolvedValue(new Blob(['x']));
+      URL.createObjectURL = vi.fn(() => 'blob:csv');
+      URL.revokeObjectURL = vi.fn();
+      const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      sync.whenIdle.mockReturnValue(new Promise<void>(() => undefined));
+      status.set({ online: true, pendingOps: 0, pendingPhotos: 1, error: null });
+      const { el } = setup();
+      click(el, '[data-test=export]');
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(api.exportCsv).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'semicolon');
+      expect(snack.open).toHaveBeenCalledWith(
+        expect.stringContaining('Des modifications de cet appareil ne sont pas encore envoyées'), 'OK', expect.anything(),
+      );
+      await vi.advanceTimersByTimeAsync(40_000);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hors ligne : « Il faut du réseau pour exporter » pour l\'export et la copie', async () => {

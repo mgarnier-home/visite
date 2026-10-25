@@ -14,6 +14,12 @@ import { ConfirmDialog } from '../room/confirm.dialog';
 import { PointCardComponent } from '../room/point-card.component';
 
 type SharedMap = Partial<Record<SharedField, unknown>>;
+
+/** Attente maximale de la synchro avant un export (ms). */
+const SYNC_WAIT_MS = 10_000;
+/** Délai avant de révoquer l'URL d'un téléchargement (Firefox Android la lit après le clic). */
+const REVOKE_DELAY_MS = 40_000;
+const PENDING_WARNING = 'Des modifications de cet appareil ne sont pas encore envoyées';
 type AuthorMap = Partial<Record<SharedField, number>>;
 
 /** Bilan : notes pondérées, points bloquants, coût réel, export et clôture. */
@@ -98,10 +104,17 @@ export class SummaryTabComponent {
     return this.run('set_rating', { point_id: pointId, value });
   }
 
-  /** Récupère l'export ; en cas d'échec, signale l'erreur et renvoie null. */
-  private async fetchCsv(sep: 'semicolon' | 'tab'): Promise<Blob | null> {
+  /**
+   * Envoie d'abord les modifications de cet appareil (attente bornée), puis récupère l'export ;
+   * en cas d'échec, signale l'erreur et renvoie null. pending : il reste des modifications non
+   * envoyées, absentes de l'export.
+   */
+  private async fetchCsv(sep: 'semicolon' | 'tab'): Promise<{ blob: Blob; pending: boolean } | null> {
+    await this.flushSync();
+    const { pendingOps, pendingPhotos } = this.sync.status();
+    const pending = pendingOps + pendingPhotos > 0;
     try {
-      return await this.api.exportCsv(this.code(), sep);
+      return { blob: await this.api.exportCsv(this.code(), sep), pending };
     } catch (e) {
       const offline = e instanceof ApiError && e.status === 0;
       this.snack.open(offline ? 'Il faut du réseau pour exporter' : 'Export impossible', 'OK', { duration: 5000 });
@@ -109,26 +122,49 @@ export class SummaryTabComponent {
     }
   }
 
+  /** Lance un cycle de synchro et attend sa fin, au plus SYNC_WAIT_MS. */
+  private async flushSync(): Promise<void> {
+    this.sync.kick();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => (timer = setTimeout(resolve, SYNC_WAIT_MS)));
+    try {
+      await Promise.race([this.sync.whenIdle().catch(() => undefined), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private warnPending(prefix = ''): void {
+    this.snack.open(`${prefix}${PENDING_WARNING} : l'export ne les contient pas`, 'OK', { duration: 8000 });
+  }
+
   protected async exportCsv(): Promise<void> {
-    const blob = await this.fetchCsv('semicolon');
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
+    const res = await this.fetchCsv('semicolon');
+    if (!res) return;
+    const url = URL.createObjectURL(res.blob);
+    // Lien attaché au document le temps du clic : certains navigateurs ignorent un lien détaché.
     const a = document.createElement('a');
     a.href = url;
     a.download = `${this.code()}.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+    if (res.pending) this.warnPending();
   }
 
   protected async copyForSheets(): Promise<void> {
-    const blob = await this.fetchCsv('tab');
-    if (!blob) return;
+    const res = await this.fetchCsv('tab');
+    if (!res) return;
     try {
-      await navigator.clipboard.writeText(await blob.text());
-      this.snack.open('Copié dans le presse-papiers', 'OK', { duration: 3000 });
+      await navigator.clipboard.writeText(await res.blob.text());
     } catch {
       this.snack.open('Copie impossible', 'OK', { duration: 5000 });
+      return;
     }
+    if (res.pending) this.warnPending('Copié dans le presse-papiers. ');
+    else this.snack.open('Copié dans le presse-papiers', 'OK', { duration: 3000 });
   }
 
   protected async closeVisit(): Promise<void> {
