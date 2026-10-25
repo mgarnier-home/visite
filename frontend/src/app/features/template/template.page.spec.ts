@@ -222,4 +222,27 @@ describe('TemplatePage', () => {
     await settle();
     expect(q<HTMLInputElement>('section-name').disabled).toBe(false);
   });
+
+  describe('saisie de poids invalide puis suppression', () => {
+    async function withInvalidWeight() {
+      const t = makeTemplate();
+      t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 1, position: 0 }] };
+      await setup(t);
+      await type(q<HTMLInputElement>('point-weight'), '');
+      expect(q<HTMLButtonElement>('save').disabled).toBe(true);
+    }
+
+    it('supprimer le point débloque « Enregistrer »', async () => {
+      await withInvalidWeight();
+      await click(q('point-remove'));
+      expect(q<HTMLButtonElement>('save').disabled).toBe(false);
+    });
+
+    it('supprimer la section débloque « Enregistrer »', async () => {
+      await withInvalidWeight();
+      confirmDialog(true);
+      await click(all('section-remove')[2]);
+      expect(q<HTMLButtonElement>('save').disabled).toBe(false);
+    });
+  });
 });

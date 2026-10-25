@@ -62,7 +62,9 @@ export class TemplatePage implements OnInit {
   protected readonly valid = computed(() => {
     const draft = this.draft();
     if (!draft) return false;
-    if (Object.values(this.weightDrafts()).some((raw) => !isPositiveNumber(raw))) return false;
+    // seules comptent les saisies des points encore présents (un point ou une section supprimés ne bloquent plus)
+    const present = new Set(draft.sections.flatMap((s) => s.points.map((p) => p.id)));
+    if (Object.entries(this.weightDrafts()).some(([id, raw]) => present.has(id) && !isPositiveNumber(raw))) return false;
     return draft.sections.every(
       (s) =>
         s.name.trim() !== '' &&
