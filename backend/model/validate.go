@@ -25,13 +25,27 @@ func ValidCode(code string) bool { return codeRe.MatchString(code) }
 
 // Validate vérifie la cohérence du modèle de visite.
 func (t Template) Validate() error {
+	sectionIDs := map[string]bool{}
+	pointIDs := map[string]bool{}
+	questionIDs := map[string]bool{}
 	for _, s := range t.Sections {
+		if err := claimID(sectionIDs, "section", s.ID); err != nil {
+			return err
+		}
 		switch s.Kind {
 		case KindRoom, KindPerBedroom, KindTopic, KindSummary:
 		default:
 			return invalid("section %q : kind inconnu %q", s.ID, s.Kind)
 		}
+		for _, q := range s.Questions {
+			if err := claimID(questionIDs, "question", q.ID); err != nil {
+				return err
+			}
+		}
 		for _, p := range s.Points {
+			if err := claimID(pointIDs, "point", p.ID); err != nil {
+				return err
+			}
 			switch p.Type {
 			case TypeConstat:
 				if len(p.Options) == 0 {
@@ -49,6 +63,18 @@ func (t Template) Validate() error {
 			}
 		}
 	}
+	return nil
+}
+
+// claimID vérifie qu'un identifiant est non vide et pas encore utilisé, puis le réserve.
+func claimID(seen map[string]bool, what, id string) error {
+	if id == "" {
+		return invalid("%s : identifiant vide", what)
+	}
+	if seen[id] {
+		return invalid("%s %q : identifiant en double", what, id)
+	}
+	seen[id] = true
 	return nil
 }
 

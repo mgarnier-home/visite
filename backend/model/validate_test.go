@@ -77,6 +77,51 @@ func TestTemplateValidate(t *testing.T) {
 	}
 }
 
+func TestTemplateValidateIDs(t *testing.T) {
+	pt := func(id string) TemplatePoint {
+		return TemplatePoint{ID: id, Label: "l", Type: TypeNote, Weight: 1}
+	}
+	q := func(id string) TemplateQuestion { return TemplateQuestion{ID: id, Text: "t"} }
+	sec := func(id string, pts []TemplatePoint, qs []TemplateQuestion) TemplateSection {
+		return TemplateSection{ID: id, Name: "S", Kind: KindRoom, Points: pts, Questions: qs}
+	}
+	tests := []struct {
+		name string
+		secs []TemplateSection
+		ok   bool
+	}{
+		{"ids distincts", []TemplateSection{
+			sec("s1", []TemplatePoint{pt("p1")}, []TemplateQuestion{q("q1")}),
+			sec("s2", []TemplatePoint{pt("p2")}, []TemplateQuestion{q("q2")}),
+		}, true},
+		{"section sans id", []TemplateSection{sec("", nil, nil)}, false},
+		{"sections en double", []TemplateSection{sec("s1", nil, nil), sec("s1", nil, nil)}, false},
+		{"point sans id", []TemplateSection{sec("s1", []TemplatePoint{pt("")}, nil)}, false},
+		{"points en double dans une section", []TemplateSection{
+			sec("s1", []TemplatePoint{pt("p1"), pt("p1")}, nil)}, false},
+		{"points en double entre sections", []TemplateSection{
+			sec("s1", []TemplatePoint{pt("p1")}, nil),
+			sec("s2", []TemplatePoint{pt("p1")}, nil)}, false},
+		{"question sans id", []TemplateSection{sec("s1", nil, []TemplateQuestion{q("")})}, false},
+		{"questions en double dans une section", []TemplateSection{
+			sec("s1", nil, []TemplateQuestion{q("q1"), q("q1")})}, false},
+		{"questions en double entre sections", []TemplateSection{
+			sec("s1", nil, []TemplateQuestion{q("q1")}),
+			sec("s2", nil, []TemplateQuestion{q("q1")})}, false},
+		{"même id pour un point et une question", []TemplateSection{
+			sec("s1", []TemplatePoint{pt("x")}, []TemplateQuestion{q("x")})}, true},
+	}
+	for _, tt := range tests {
+		err := Template{Version: 1, Sections: tt.secs}.Validate()
+		if (err == nil) != tt.ok {
+			t.Errorf("%s : err = %v, ok attendu = %v", tt.name, err, tt.ok)
+		}
+		if err != nil && !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s : l'erreur doit envelopper ErrInvalid : %v", tt.name, err)
+		}
+	}
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestFicheValidate(t *testing.T) {
