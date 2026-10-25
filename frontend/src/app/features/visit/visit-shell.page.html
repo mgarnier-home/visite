@@ -1,0 +1,50 @@
+@switch (phase()) {
+  @case ('loading') {
+    <p class="message" data-test="loading">Ouverture de la visite…</p>
+  }
+  @case ('network') {
+    <main class="message" data-test="error">
+      <p>Il faut du réseau pour ouvrir cette visite la première fois</p>
+      <a mat-stroked-button routerLink="/">Accueil</a>
+    </main>
+  }
+  @case ('notfound') {
+    <main class="message" data-test="error">
+      <p>Aucune visite avec ce code</p>
+      <a mat-stroked-button routerLink="/">Accueil</a>
+    </main>
+  }
+  @case ('error') {
+    <main class="message" data-test="error">
+      <p>Impossible d'ouvrir cette visite pour l'instant</p>
+      <a mat-stroked-button routerLink="/">Accueil</a>
+    </main>
+  }
+  @case ('ready') {
+    <main class="visit">
+      <header>
+        <a mat-icon-button routerLink="/" aria-label="Accueil"><mat-icon svgIcon="home" /></a>
+        <h1 data-test="title">{{ title() }}</h1>
+        <app-sync-indicator />
+      </header>
+
+      @if (closed()) {
+        <div class="closed" role="status" data-test="closed-banner">
+          <mat-icon svgIcon="lock" />
+          Visite clôturée
+        </div>
+      }
+
+      <nav mat-tab-nav-bar [tabPanel]="panel">
+        @for (t of tabs; track t.path) {
+          <a mat-tab-link [routerLink]="['/v', code, t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive">
+            {{ t.label }}
+          </a>
+        }
+      </nav>
+      <mat-tab-nav-panel #panel>
+        <router-outlet />
+      </mat-tab-nav-panel>
+    </main>
+  }
+}

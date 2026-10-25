@@ -1,0 +1,30 @@
+<section class="rooms">
+  @if (packingList()) {
+    <details class="packing" data-test="packing">
+      <summary>À emporter</summary>
+      <p>{{ packingList() }}</p>
+    </details>
+  }
+
+  <ul class="room-list">
+    @for (r of rooms(); track r.id) {
+      <li>
+        <a class="room" [routerLink]="['/v', code(), 'room', r.id]" data-test="room">
+          <span class="name">{{ r.name }}</span>
+          <span class="progress" data-test="progress">{{ r.filled }} / {{ r.total }}</span>
+          <mat-icon svgIcon="chevron_right" />
+        </a>
+      </li>
+    }
+  </ul>
+
+  <div class="actions">
+    <button mat-flat-button type="button" data-test="add-room" [disabled]="closed()" (click)="addRoom()">
+      <mat-icon svgIcon="add" />
+      Ajouter une pièce
+    </button>
+    <app-photo-button [disabled]="closed()" (photo)="addGlobalPhoto($event)" (failed)="photoFailed($event)">
+      Photo globale
+    </app-photo-button>
+  </div>
+</section>
