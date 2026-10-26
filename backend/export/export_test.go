@@ -42,11 +42,12 @@ func fixture() Data {
 			{ID: "q-ch", RoomID: "r-salon", Text: "Charges ?", Position: 1},
 		},
 		Shared: map[string]map[string]json.RawMessage{
-			"r-salon": {"area_m2": raw("22.5")},
-			"p-fen":   {"value": raw(`"problem"`), "blocking": raw("true"), "works_eur": raw("1500")},
-			"p-sol":   {"value": raw(`"parquet"`), "blocking": raw("false")},
-			"p-hum":   {"works_eur": raw("999")},
-			"q-ch":    {"answer": raw(`"120 €/mois"`), "asked": raw("true")},
+			"maison-test": {"notes": raw(`"Rappeler l'agent"`)},
+			"r-salon":     {"area_m2": raw("22.5"), "notes": raw(`"Fenêtre fissurée"`)},
+			"p-fen":       {"value": raw(`"problem"`), "blocking": raw("true"), "works_eur": raw("1500")},
+			"p-sol":       {"value": raw(`"parquet"`), "blocking": raw("false")},
+			"p-hum":       {"works_eur": raw("999")},
+			"q-ch":        {"answer": raw(`"120 €/mois"`), "asked": raw("true")},
 		},
 		Ratings: map[string]map[int]*int{
 			"p-lum": {1: ptr(4), 2: nil},

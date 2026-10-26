@@ -47,6 +47,12 @@ describe('applyOp', () => {
     expect(s2.shared).toEqual([{ target_id: 'p1', field: 'blocking', value: false, updated_at: 20, author: 2 }]);
   });
 
+  it('set_shared sur le code de la visite : notes de la visite', () => {
+    const s = applyOp(baseState(), op('set_shared', { target_id: 'abc', field: 'notes', value: 'Rappeler' }, 10));
+    expect(s.shared).toEqual([{ target_id: 'abc', field: 'notes', value: 'Rappeler', updated_at: 10, author: 2 }]);
+    expect(applyOp(baseState(), op('set_shared', { target_id: 'autre', field: 'notes', value: 'x' })).shared).toEqual([]);
+  });
+
   it('set_fiche fusionne les champs', () => {
     const s = applyOp(baseState(), op('set_fiche', { fields: { price_eur: 250000 } }));
     expect(s.visit.fiche.price_eur).toBe(250000);

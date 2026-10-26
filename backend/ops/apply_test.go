@@ -370,6 +370,12 @@ func TestSharedTargets(t *testing.T) {
 		{casePt, "value", nil, "rejected/invalid"},
 		{e.question(), "answer", nil, "rejected/invalid"},
 		{"inconnu", "area_m2", 3, "rejected/not_found"},
+		{room, "notes", "Fenêtre fissurée", "applied"},
+		{room, "notes", 3, "rejected/invalid"},
+		{e.code, "notes", "Rappeler l'agent", "applied"},
+		{e.code, "notes", "", "applied"},
+		{e.code, "notes", nil, "rejected/invalid"},
+		{e.code, "area_m2", 3, "rejected/invalid"},
 	}
 	for _, c := range cases {
 		got := e.applyOne(devB, op("set_shared", 100, map[string]any{"target_id": c.target, "field": c.field, "value": c.value}))
@@ -596,6 +602,9 @@ func TestClosedVisitRejects(t *testing.T) {
 	if got := e.applyOne(devB, op("add_room", 200, map[string]any{"id": uuid.NewString(), "name": "Cellier"})); got != "rejected/closed" {
 		t.Errorf("add_room après clôture : %s, veut rejected/closed", got)
 	}
+	if got := e.applyOne(devB, op("set_shared", 200, map[string]any{"target_id": e.code, "field": "notes", "value": "x"})); got != "rejected/closed" {
+		t.Errorf("notes de la visite après clôture : %s, veut rejected/closed", got)
+	}
 }
 
 func TestUnknownTarget(t *testing.T) {
@@ -615,6 +624,7 @@ func TestUnknownTarget(t *testing.T) {
 		{"set_shared pièce d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherRoom, "field": "area_m2", "value": 3})},
 		{"set_shared point d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherPoint, "field": "blocking", "value": true})},
 		{"set_shared question d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherQuestion, "field": "asked", "value": true})},
+		{"set_shared notes d'une autre visite", op("set_shared", 1, map[string]any{"target_id": "autre-maison", "field": "notes", "value": "x"})},
 		{"rename_room inconnu", op("rename_room", 1, map[string]any{"room_id": uuid.NewString(), "name": "x"})},
 		{"hide_room autre visite", op("hide_room", 1, map[string]any{"room_id": otherRoom})},
 		{"add_point autre visite", op("add_point", 1, map[string]any{"id": uuid.NewString(), "room_id": otherRoom, "label": "x", "type": "note", "options": []string{}})},
@@ -781,6 +791,41 @@ func TestCommentLastWriteWins(t *testing.T) {
 	}
 	if got := e.applyOne(devB, op("set_comment", 300, map[string]any{"room_id": room, "text": ""})); got != "applied" {
 		t.Errorf("commentaire vidé : %s", got)
+	}
+}
+
+// Les notes de la visite sont partagées : un participant les modifie comme le créateur,
+// selon la même « dernière écriture gagnante ».
+func TestVisitNotes(t *testing.T) {
+	e := newEnv(t)
+	set := func(device string, ts int64, text string) string {
+		return e.applyOne(device, op("set_shared", ts, map[string]any{"target_id": e.code, "field": "notes", "value": text}))
+	}
+	if got := set(devB, 200, "de B"); got != "applied" {
+		t.Fatalf("notes par B : %s", got)
+	}
+	if got := set(devA, 100, "de A, plus ancien"); got != "applied" {
+		t.Fatalf("notes par A : %s", got)
+	}
+	if v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'notes'`, e.code); v != `"de B"` {
+		t.Errorf("notes = %s, veut \"de B\"", v)
+	}
+}
+
+// Un élément ajouté ne peut pas prendre le code de la visite comme id : celui-ci est la
+// cible des notes de la visite.
+func TestNewIDIsNotVisitCode(t *testing.T) {
+	e := newEnv(t)
+	room := e.roomByDir("cuisine")
+	cases := []ops.Op{
+		op("add_room", 1, map[string]any{"id": e.code, "name": "Cellier"}),
+		op("add_point", 1, map[string]any{"id": e.code, "room_id": room, "label": "x", "type": "note", "options": []string{}}),
+		op("add_question", 1, map[string]any{"id": e.code, "room_id": room, "text": "x"}),
+	}
+	for _, o := range cases {
+		if got := e.applyOne(devB, o); got != "rejected/invalid" {
+			t.Errorf("%s avec le code de la visite : %s, veut rejected/invalid", o.Type, got)
+		}
 	}
 }
 

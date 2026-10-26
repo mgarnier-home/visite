@@ -15,7 +15,8 @@ func TestExportDataByParticipant(t *testing.T) {
 	mustApply(t, s, devA,
 		stateOp("a1", ops.TypeSetRating, 1, map[string]any{"point_id": pt, "value": 5}),
 		stateOp("a2", ops.TypeSetComment, 1, map[string]any{"room_id": room, "text": "texte de A"}),
-		stateOp("a3", ops.TypeSetShared, 1, map[string]any{"target_id": q, "field": "answer", "value": "oui"}))
+		stateOp("a3", ops.TypeSetShared, 1, map[string]any{"target_id": q, "field": "answer", "value": "oui"}),
+		stateOp("a4", ops.TypeSetShared, 1, map[string]any{"target_id": stateCode, "field": "notes", "value": "notes de la visite"}))
 	mustApply(t, s, devB,
 		stateOp("b1", ops.TypeSetRating, 2, map[string]any{"point_id": pt, "value": nil}),
 		stateOp("b2", ops.TypeSetComment, 2, map[string]any{"room_id": room, "text": "texte de B"}))
@@ -41,6 +42,9 @@ func TestExportDataByParticipant(t *testing.T) {
 	}
 	if string(d.Shared[q]["answer"]) != `"oui"` {
 		t.Errorf("shared = %s", d.Shared[q]["answer"])
+	}
+	if string(d.Shared[stateCode]["notes"]) != `"notes de la visite"` {
+		t.Errorf("notes de la visite = %s", d.Shared[stateCode]["notes"])
 	}
 }
 

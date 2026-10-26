@@ -1,5 +1,22 @@
 <section class="fiche">
   @if (fiche(); as f) {
+    <label class="field notes">
+      <span>
+        Notes (partagées)
+        @if (notes().author !== undefined) {
+          <span class="author" data-test="visit-notes-author">P{{ notes().author }}</span>
+        }
+      </span>
+      <textarea
+        data-test="visit-notes"
+        rows="4"
+        [value]="notesDraft() ?? notes().text"
+        [disabled]="closed()"
+        (input)="onNotesInput($event)"
+        (blur)="saveNotes()"
+      ></textarea>
+    </label>
+
     @if (editable()) {
       <form class="form" (submit)="$event.preventDefault()">
         @for (field of fields; track field.name) {

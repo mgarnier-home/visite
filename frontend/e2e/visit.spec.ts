@@ -157,6 +157,32 @@ test.describe('visite à deux participants', () => {
     await expect(onB.getByText('P1', { exact: true })).toBeVisible({ timeout: 10_000 });
   });
 
+  test('shared notes propagate, on a room and on the visit', async ({ browser }) => {
+    p = await startVisit(browser, uniqueCode());
+    const { a, b } = p;
+    await openRoom(a, KITCHEN);
+    await openRoom(b, KITCHEN);
+
+    const roomNotes = 'Hotte à changer';
+    await sent(a, async () => {
+      await a.locator('[data-test=room-notes]').fill(roomNotes);
+      await a.locator('[data-test=room-notes]').blur();
+    });
+    await expect(b.locator('[data-test=room-notes]')).toHaveValue(roomNotes, { timeout: 10_000 });
+    await expect(b.locator('[data-test=room-notes-author]')).toHaveText('P1', { timeout: 10_000 });
+
+    // B n'a pas créé la visite : seules les notes de la fiche lui sont modifiables.
+    await a.getByRole('tab', { name: 'Fiche' }).click();
+    await b.getByRole('tab', { name: 'Fiche' }).click();
+    const visitNotes = 'Demander les diagnostics à l\'agent';
+    await sent(b, async () => {
+      await b.locator('[data-test=visit-notes]').fill(visitNotes);
+      await b.locator('[data-test=visit-notes]').blur();
+    });
+    await expect(a.locator('[data-test=visit-notes]')).toHaveValue(visitNotes, { timeout: 10_000 });
+    await expect(a.locator('[data-test=visit-notes-author]')).toHaveText('P2', { timeout: 10_000 });
+  });
+
   test('offline edits sync on reconnect', async ({ browser }) => {
     p = await startVisit(browser, uniqueCode());
     const { a, b, contextB } = p;
@@ -250,5 +276,6 @@ test.describe('visite à deux participants', () => {
     for (const c of await choices.all()) await expect(c).toBeDisabled();
     await expect(b.locator('[data-test=answer]').first()).toBeDisabled();
     await expect(b.locator('[data-test=comment]')).toBeDisabled();
+    await expect(b.locator('[data-test=room-notes]')).toBeDisabled();
   });
 });

@@ -34,7 +34,7 @@ export interface Point {
   weight: number; position: number;
 }
 export interface Question { id: string; room_id: string; text: string; position: number }
-export type SharedField = 'value' | 'blocking' | 'works_eur' | 'answer' | 'asked' | 'area_m2';
+export type SharedField = 'value' | 'blocking' | 'works_eur' | 'answer' | 'asked' | 'area_m2' | 'notes';
 export interface SharedValue {
   target_id: string; field: SharedField; value: unknown; updated_at: number;
   author: number; // numéro du participant

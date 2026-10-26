@@ -35,6 +35,7 @@ function makeState(closed = false): VisitState {
     shared: [
       { target_id: 'q1', field: 'answer', value: 'Gaz', updated_at: 1, author: 2 },
       { target_id: 'r1', field: 'area_m2', value: 20, updated_at: 1, author: 2 },
+      { target_id: 'r1', field: 'notes', value: 'Prévoir rideaux', updated_at: 1, author: 3 },
     ],
     ratings: [],
     comments: [{ room_id: 'r1', text: 'Lumineux', updated_at: 1 }],
@@ -113,6 +114,27 @@ describe('RoomPage', () => {
     state.set(s);
     await settle(fixture);
     expect(el.querySelector('.question [data-test=answer-author]')).toBeNull();
+  });
+
+  it('notes partagées : affichées avec leur auteur, enregistrées à la perte du focus si modifiées', async () => {
+    const { fixture, el } = await setup();
+    const notes = q<HTMLTextAreaElement>(el, '[data-test=room-notes]');
+    expect(notes.value).toBe('Prévoir rideaux');
+    // affichées en premier, avant les points
+    expect(notes.compareDocumentPosition(q(el, 'app-point-card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(q(el, '[data-test=room-notes-author]').textContent?.trim()).toBe('P3');
+    notes.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    notes.value = 'Prévoir rideaux et volets';
+    notes.dispatchEvent(new Event('input'));
+    notes.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'r1', field: 'notes', value: 'Prévoir rideaux et volets' });
+
+    const s = makeState();
+    s.shared = s.shared.filter((v) => v.field !== 'notes');
+    state.set(s);
+    await settle(fixture);
+    expect(el.querySelector('[data-test=room-notes-author]')).toBeNull();
   });
 
   it('un clic sur un bouton de note dispatche set_rating ; une case dispatche set_shared value', async () => {
@@ -232,6 +254,7 @@ describe('RoomPage', () => {
     expect(controls.every((b) => b.disabled)).toBe(true);
     expect(q<HTMLTextAreaElement>(el, '[data-test=answer]').disabled).toBe(true);
     expect(q<HTMLTextAreaElement>(el, '[data-test=comment]').disabled).toBe(true);
+    expect(q<HTMLTextAreaElement>(el, '[data-test=room-notes]').disabled).toBe(true);
     expect(q<HTMLInputElement>(el, '[data-test=area]').disabled).toBe(true);
   });
 

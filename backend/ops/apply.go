@@ -198,9 +198,10 @@ func (a *applier) idTaken(id string) (bool, error) {
 	return false, nil
 }
 
-// newID vérifie l'identifiant d'un élément ajouté : non vide et encore libre.
+// newID vérifie l'identifiant d'un élément ajouté : non vide, encore libre, et distinct du
+// code de la visite (cible des notes de la visite).
 func (a *applier) newID(id string) error {
-	if id == "" {
+	if id == "" || id == a.code {
 		return reject(ReasonInvalid)
 	}
 	taken, err := a.idTaken(id)
@@ -435,9 +436,12 @@ func (a *applier) setShared() error {
 	return a.writeLWW(store.KindShared, store.LWWKey{ID: p.TargetID, Sub: p.Field}, p.Value)
 }
 
-// sharedTarget résout la cible d'une valeur partagée : point, puis question, puis pièce.
-// Le point n'est renvoyé que pour TargetPoint.
+// sharedTarget résout la cible d'une valeur partagée : la visite (par son code), puis
+// point, question et pièce. Le point n'est renvoyé que pour TargetPoint.
 func (a *applier) sharedTarget(id string) (model.TargetKind, *model.Point, error) {
+	if id == a.code {
+		return model.TargetVisit, nil, nil
+	}
 	pt, code, err := a.tx.Point(id)
 	if err == nil {
 		if code != a.code {

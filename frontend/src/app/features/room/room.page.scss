@@ -55,6 +55,12 @@
   gap: 4px;
   font: var(--mat-sys-label-large);
 
+  .author {
+    margin-left: 8px;
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
   input,
   textarea {
     box-sizing: border-box;

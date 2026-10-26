@@ -44,8 +44,10 @@ Le contenu de départ (pièces, points à vérifier, questions) vient de
 - Notes (`note`) et commentaires de pièce : individuels et masqués. Le serveur ne les renvoie
   jamais à un autre appareil. Ils n'apparaissent que dans l'export CSV, libre d'accès : le
   masquage sert à ne pas s'influencer, pas à protéger un secret.
-- Constats (`constat`, `case`), drapeaux bloquants, estimations de travaux, réponses de l'agent et
-  case « posée » : partagés entre participants, dernière écriture gagnante.
+- Constats (`constat`, `case`), drapeaux bloquants, estimations de travaux, réponses de l'agent,
+  case « posée » et notes libres (une par pièce, une pour la visite) : partagés entre
+  participants, dernière écriture gagnante. Tous les participants modifient les notes libres,
+  y compris celles de la visite.
 - Seul le créateur modifie la fiche du bien et clôture la visite. Une visite clôturée refuse
   toute nouvelle saisie ; elle reste consultable et exportable.
 - Créer et rejoindre une visite demandent le réseau. Tout le reste fonctionne hors ligne.
@@ -165,6 +167,10 @@ Partagées :
 | question | `answer`    | texte                                                       |
 | question | `asked`     | booléen                                                     |
 | pièce    | `area_m2`   | réel positif ou nul (surface mesurée)                       |
+| pièce    | `notes`     | texte libre                                                 |
+| visite   | `notes`     | texte libre ; `target_id` = code de la visite               |
+
+Un élément ajouté (pièce, point, question) ne peut pas prendre le code de la visite comme id.
 
 Autres tables :
 
@@ -289,12 +295,12 @@ refusée n'empêche pas les suivantes.
      pièce » (vide ou copie d'une section du modèle) et « Photo globale » ;
    - **Questions** : toutes les questions par pièce, filtre « non posées », badge du nombre de
      questions non posées ;
-   - **Fiche** : lecture seule sauf pour le créateur, champs calculés, téléphone et e-mail de
-     l'agent cliquables ;
+   - **Fiche** : lecture seule sauf pour le créateur, notes de la visite en tête, modifiables par tous,
+     champs calculés, téléphone et e-mail de l'agent cliquables ;
    - **Bilan** : mes notes des critères pondérés, mon score pondéré, points bloquants, total
      des travaux, prix réel, alerte sur les questions non posées, boutons « Exporter le CSV »,
      « Copier pour Sheets » et, pour le créateur, « Clôturer ».
-4. **Pièce** : surface mesurée, points (une carte par type : 5 boutons et N/A pour `note` ;
+4. **Pièce** : notes partagées en tête, surface mesurée, points (une carte par type : 5 boutons et N/A pour `note` ;
    OK / Problème / N/A pour `case` ; pastilles d'options et N/A pour `constat`), menu « ⋯ »
    par point pour le drapeau bloquant et les travaux, auteur affiché sur les valeurs partagées
    (« P2 »), questions avec case « posée » et réponse, mon commentaire, photos (vignettes et
@@ -330,12 +336,12 @@ Une visite clôturée s'affiche en lecture seule.
   est le nombre de participants de la visite.
 - La colonne `visite` contient le code sur chaque ligne.
 - Lignes, dans l'ordre :
-  1. Fiche : `pièce` = « Fiche », `point` = nom du champ, valeur dans `réponse partagée`, champs
-     calculés compris.
+  1. Fiche : `pièce` = « Fiche », `point` = nom du champ, valeur dans `réponse partagée`, notes
+     de la visite (`notes`) et champs calculés compris.
   2. Pour chaque pièce visible, dans l'ordre : sa surface mesurée (`type` = `surface`), ses
      points (`type` = `note`, `constat` ou `case` ; valeur partagée ou notes par participant),
-     ses questions (`type` = `question`), puis une ligne `commentaire` avec le commentaire de
-     chaque participant.
+     ses questions (`type` = `question`), une ligne `notes` avec ses notes partagées, puis une
+     ligne `commentaire` avec le commentaire de chaque participant.
   3. Bilan : ses points avec le poids dans `réponse partagée`, une ligne `score pondéré` avec le
      score de chaque participant, une ligne `total travaux`, une ligne `prix réel`.
 - N/A s'écrit `N/A`, une valeur absente reste vide, les booléens s'écrivent `oui` ou vide.

@@ -79,6 +79,7 @@ func Rows(d Data) [][]string {
 				r[5] = d.sharedValue(q.ID, "asked")
 			}
 		}
+		b.row(room.Name, "", "notes", d.sharedValue(room.ID, "notes"))
 		r := b.row(room.Name, "", "commentaire", "")
 		for n := 1; n <= d.Participants; n++ {
 			r[fixedCols+n-1] = text(d.Comments[room.ID][n])
@@ -173,6 +174,7 @@ func (b *builder) ficheRows() {
 	add("bedrooms_count", integer(f.BedroomsCount))
 	add("listing_url", str(f.ListingURL))
 	add("heating_type", str(f.HeatingType))
+	add("notes", b.d.sharedValue(b.d.Code, "notes"))
 	add("prix_m2", num(model.PricePerM2(f)))
 	fees := ""
 	if f.PriceEUR != nil {

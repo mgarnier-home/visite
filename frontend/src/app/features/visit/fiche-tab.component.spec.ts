@@ -7,7 +7,10 @@ import { SyncService } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
 import { FicheTabComponent } from './fiche-tab.component';
 
-function makeState(over: { creator?: boolean; closed?: boolean } = {}, fiche: Partial<Fiche> = {}): VisitState {
+function makeState(
+  over: { creator?: boolean; closed?: boolean; notes?: string } = {},
+  fiche: Partial<Fiche> = {},
+): VisitState {
   return {
     seq: 1,
     me: { number: 1 },
@@ -22,7 +25,8 @@ function makeState(over: { creator?: boolean; closed?: boolean } = {}, fiche: Pa
         bedrooms_count: null, listing_url: 'https://exemple.fr/annonce', heating_type: null, ...fiche,
       },
     },
-    rooms: [], points: [], questions: [], shared: [], ratings: [], comments: [], photos: [],
+    rooms: [], points: [], questions: [], ratings: [], comments: [], photos: [],
+    shared: over.notes === undefined ? [] : [{ target_id: 'maison-x', field: 'notes', value: over.notes, updated_at: 1, author: 2 }],
   } as unknown as VisitState;
 }
 
@@ -57,9 +61,9 @@ describe('FicheTabComponent', () => {
     });
   });
 
-  it('non-créateur : texte en lecture seule, aucun champ de saisie', () => {
+  it('non-créateur : texte en lecture seule, aucun champ de saisie hormis les notes', () => {
     const { el } = setup(makeState({ creator: false }));
-    expect(el.querySelectorAll('input, select, textarea').length).toBe(0);
+    expect(el.querySelectorAll('input, select, textarea:not([data-test=visit-notes])').length).toBe(0);
     expect(text(el, '[data-field=address]')).toContain('12 rue des Lilas');
   });
 
@@ -203,12 +207,65 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
+  it('notes : modifiables par un participant non créateur, envoyées à la perte du focus si modifiées', () => {
+    const { el } = setup(makeState({ creator: false, notes: 'Rappeler l\'agent' }));
+    const notes = el.querySelector<HTMLTextAreaElement>('[data-test=visit-notes]')!;
+    expect(notes.value).toBe('Rappeler l\'agent');
+    // affichées en premier, avant les champs du bien
+    expect(notes.compareDocumentPosition(field(el, 'address')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notes.disabled).toBe(false);
+    expect(text(el, '[data-test=visit-notes-author]')).toBe('P2');
+    notes.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    notes.value = 'Rappeler l\'agent lundi';
+    notes.dispatchEvent(new Event('input'));
+    notes.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'maison-x', field: 'notes', value: 'Rappeler l\'agent lundi' });
+  });
+
+  it('notes : une modification distante n\'écrase pas la saisie en cours', () => {
+    const { fixture, el } = setup(makeState({ notes: 'A' }));
+    const notes = el.querySelector<HTMLTextAreaElement>('[data-test=visit-notes]')!;
+    notes.value = 'B';
+    notes.dispatchEvent(new Event('input'));
+    state.set(makeState({ notes: 'C' }));
+    fixture.detectChanges();
+    expect(notes.value).toBe('B');
+  });
+
+  it('notes : la saisie en cours est enregistrée quand l\'application passe en arrière-plan et à la destruction', () => {
+    const { fixture, el } = setup();
+    const notes = el.querySelector<HTMLTextAreaElement>('[data-test=visit-notes]')!;
+    notes.value = 'Parking';
+    notes.dispatchEvent(new Event('input'));
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'maison-x', field: 'notes', value: 'Parking' });
+    sync.dispatch.mockClear();
+    notes.value = 'Parking devant';
+    notes.dispatchEvent(new Event('input'));
+    fixture.destroy();
+    expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'maison-x', field: 'notes', value: 'Parking devant' });
+  });
+
+  it('notes : échec d\'enregistrement signalé, saisie gardée', async () => {
+    sync.dispatch.mockRejectedValue(new Error('x'));
+    const { fixture, el } = setup();
+    const notes = el.querySelector<HTMLTextAreaElement>('[data-test=visit-notes]')!;
+    notes.value = 'Parking';
+    notes.dispatchEvent(new Event('input'));
+    notes.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(snack.open).toHaveBeenCalled());
+    fixture.detectChanges();
+    expect(notes.value).toBe('Parking');
+  });
+
   it('visite clôturée : champs désactivés', async () => {
     const { fixture, el } = setup(makeState({ closed: true }));
     await fixture.whenStable();
     fixture.detectChanges();
-    const inputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
+    const inputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea'));
     expect(inputs.length).toBeGreaterThan(0);
     expect(inputs.every((i) => i.disabled)).toBe(true);
+    expect(el.querySelector<HTMLTextAreaElement>('[data-test=visit-notes]')?.disabled).toBe(true);
   });
 });
