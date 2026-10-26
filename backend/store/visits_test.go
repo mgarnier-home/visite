@@ -429,6 +429,62 @@ func listQuestionTexts(t *testing.T, s *Store, roomID string) []string {
 	return out
 }
 
+// Chaque point et chaque question copiés gardent l'indicateur « importante » du modèle ; la note
+// globale ajoutée à chaque pièce est importante.
+func TestCreateVisitCopiesImportance(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, err := s.GetTemplate(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustCreate(t, s, "maison-1", ficheWithBedrooms(nil), "dev-1", testNow)
+	points := map[string]bool{"Note globale de la pièce": true} // libellé → important
+	questions := map[string]bool{}                              // texte → importante
+	for _, sec := range tpl.Sections {
+		for _, p := range sec.Points {
+			if w, dup := points[p.Label]; dup && w != p.Important {
+				t.Fatalf("libellé %q en double avec deux indicateurs différents", p.Label)
+			}
+			points[p.Label] = p.Important
+		}
+		for _, q := range sec.Questions {
+			questions[q.Text] = q.Important
+		}
+	}
+	check := func(what string, want map[string]bool, query string) {
+		t.Helper()
+		rows, err := s.db.Query(query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		important, secondary := 0, 0
+		for rows.Next() {
+			var text string
+			var imp bool
+			if err := rows.Scan(&text, &imp); err != nil {
+				t.Fatal(err)
+			}
+			if w, ok := want[text]; !ok || w != imp {
+				t.Errorf("%s %q : important = %v, veut %v (connu : %v)", what, text, imp, w, ok)
+			}
+			if imp {
+				important++
+			} else {
+				secondary++
+			}
+		}
+		if important == 0 || secondary == 0 {
+			t.Errorf("%s : %d importants, %d secondaires : la seed doit fournir les deux", what, important, secondary)
+		}
+	}
+	check("point", points, `SELECT p.label, p.important FROM visit_points p
+		JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = 'maison-1'`)
+	check("question", questions, `SELECT q.text, q.important FROM visit_questions q
+		JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = 'maison-1'`)
+}
+
 func TestCreateVisitExcludesSection(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
@@ -482,8 +538,15 @@ func TestCreateVisitOtherQuestions(t *testing.T) {
 			}
 		}
 	}
-	if len(want) != 6 || fmt.Sprint(got) != fmt.Sprint(want) {
+	if len(want) != 5 || fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("questions = %q, veut %q", got, want)
+	}
+	var secondary int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ? AND important = 0`, o.id).Scan(&secondary); err != nil {
+		t.Fatal(err)
+	}
+	if secondary != 0 {
+		t.Errorf("%d questions secondaires dans « Autres questions », veut 0", secondary)
 	}
 	if got[0][:len("Cuisine : La cuisine est-elle vendue équipée ?")] != "Cuisine : La cuisine est-elle vendue équipée ?" {
 		t.Errorf("première question = %q", got[0])

@@ -138,6 +138,22 @@ func TestStateSharesVisitNotes(t *testing.T) {
 	}
 }
 
+// L'état indique pour chaque point et chaque question s'il est important.
+func TestStateImportance(t *testing.T) {
+	s := newStateStore(t)
+	st := mustState(t, s, devA, 0)
+	var questions, points [2]int // secondaires, importants
+	for _, q := range st.Questions {
+		questions[map[bool]int{false: 0, true: 1}[q.Important]]++
+	}
+	for _, p := range st.Points {
+		points[map[bool]int{false: 0, true: 1}[p.Important]]++
+	}
+	if questions[0] == 0 || questions[1] == 0 || points[0] == 0 || points[1] == 0 {
+		t.Errorf("questions (secondaires, importantes) = %v, points = %v", questions, points)
+	}
+}
+
 func TestChangesSince(t *testing.T) {
 	s := newStateStore(t)
 	st := mustState(t, s, devA, 0)

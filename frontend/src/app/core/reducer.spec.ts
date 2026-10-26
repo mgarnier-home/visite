@@ -17,8 +17,8 @@ function baseState(): VisitState {
       packing_list: '', participants: 2,
     },
     rooms: [{ id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 3, hidden: false }],
-    points: [{ id: 'p1', room_id: 'r1', label: 'Murs', type: 'constat', options: [], weight: 1, position: 4 }],
-    questions: [{ id: 'q1', room_id: 'r1', text: 'Âge ?', position: 2 }],
+    points: [{ id: 'p1', room_id: 'r1', label: 'Murs', type: 'constat', options: [], weight: 1, position: 4, important: true }],
+    questions: [{ id: 'q1', room_id: 'r1', text: 'Âge ?', position: 2, important: false }],
     shared: [], ratings: [], comments: [], photos: [],
   };
 }
@@ -69,7 +69,7 @@ describe('applyOp', () => {
     expect(s.rooms[1]).toEqual({ id: 'r2', name: 'Cave', dir_name: '', kind: 'room', position: 4, hidden: false });
     expect(s.points[1]).toEqual({
       id: 'n2', room_id: 'r2', label: 'Note globale de la pièce', type: 'note',
-      options: [], weight: 1, position: 0,
+      options: [], weight: 1, position: 0, important: true,
     });
   });
 
@@ -96,12 +96,13 @@ describe('applyOp', () => {
 
   it('add_point ajoute un point en dernière position', () => {
     const s = applyOp(baseState(), op('add_point', { id: 'p2', room_id: 'r1', label: 'Sol', type: 'case', options: ['a'] }));
-    expect(s.points[1]).toEqual({ id: 'p2', room_id: 'r1', label: 'Sol', type: 'case', options: ['a'], weight: 1, position: 5 });
+    expect(s.points[1]).toEqual({ id: 'p2', room_id: 'r1', label: 'Sol', type: 'case', options: ['a'], weight: 1, position: 5, important: true });
   });
 
   it('add_question ajoute une question en dernière position', () => {
     const s = applyOp(baseState(), op('add_question', { id: 'q2', room_id: 'r1', text: 'Taxe ?' }));
-    expect(s.questions[1]).toEqual({ id: 'q2', room_id: 'r1', text: 'Taxe ?', position: 3 });
+    // ajoutée pendant la visite : importante
+    expect(s.questions[1]).toEqual({ id: 'q2', room_id: 'r1', text: 'Taxe ?', position: 3, important: true });
   });
 
   it('renvoie l\'état inchangé pour un type ou une cible inconnus', () => {
@@ -156,7 +157,7 @@ describe('mergeChanges', () => {
     st.comments = [{ room_id: 'r1', text: 'a', updated_at: 1 }];
     const ch = baseState();
     ch.points = []; ch.rooms = [];
-    ch.questions = [{ id: 'q1', room_id: 'r1', text: 'Nouveau', position: 2 }];
+    ch.questions = [{ id: 'q1', room_id: 'r1', text: 'Nouveau', position: 2, important: false }];
     ch.ratings = [{ point_id: 'p1', value: 5, updated_at: 2 }];
     ch.comments = [{ room_id: 'r1', text: 'b', updated_at: 2 }];
     ch.photos = [{ id: 'ph1', room_id: null, author: 1, taken_at: 't' }];
@@ -172,7 +173,7 @@ describe('mergeChanges', () => {
     const st = applyOp(baseState(), op('add_room', { id: 'r2', name: 'Cave', from_section_id: null, note_point_id: 'n2' }));
     const ch = baseState();
     ch.rooms = []; ch.questions = [];
-    ch.points = [{ id: 'n2', room_id: 'r2', label: 'Note globale de la pièce', type: 'note', options: [], weight: 1, position: 0 }];
+    ch.points = [{ id: 'n2', room_id: 'r2', label: 'Note globale de la pièce', type: 'note', options: [], weight: 1, position: 0, important: true }];
     const m = mergeChanges(st, ch);
     expect(m.points.filter((p) => p.room_id === 'r2')).toHaveLength(1);
   });

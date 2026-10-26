@@ -6,7 +6,7 @@ import { provideAppIcons } from '../../shared/icons';
 import { PointCardComponent } from './point-card.component';
 
 const mk = (type: Point['type'], options: string[] = []): Point =>
-  ({ id: 'p1', room_id: 'r1', label: 'Sol', type, options, weight: 1, position: 0 });
+  ({ id: 'p1', room_id: 'r1', label: 'Sol', type, options, weight: 1, position: 0, important: true });
 
 @Component({
   imports: [PointCardComponent],

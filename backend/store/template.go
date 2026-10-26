@@ -51,14 +51,14 @@ func readTemplate(ctx context.Context, q querier) (model.Template, error) {
 	}
 
 	rows, err = q.QueryContext(ctx,
-		`SELECT id, section_id, label, type, options, weight, position FROM template_points ORDER BY position, id`)
+		`SELECT id, section_id, label, type, options, weight, position, important FROM template_points ORDER BY position, id`)
 	if err != nil {
 		return t, err
 	}
 	for rows.Next() {
 		var p model.TemplatePoint
 		var sectionID, options string
-		if err := rows.Scan(&p.ID, &sectionID, &p.Label, &p.Type, &options, &p.Weight, &p.Position); err != nil {
+		if err := rows.Scan(&p.ID, &sectionID, &p.Label, &p.Type, &options, &p.Weight, &p.Position, &p.Important); err != nil {
 			rows.Close()
 			return t, err
 		}
@@ -164,9 +164,9 @@ func (s *Store) SaveTemplate(ctx context.Context, t model.Template) (model.Templ
 				return model.Template{}, err
 			}
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO template_points (id, section_id, label, type, options, weight, position)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				p.ID, sec.ID, p.Label, p.Type, string(ob), p.Weight, p.Position); err != nil {
+				`INSERT INTO template_points (id, section_id, label, type, options, weight, position, important)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				p.ID, sec.ID, p.Label, p.Type, string(ob), p.Weight, p.Position, p.Important); err != nil {
 				return model.Template{}, err
 			}
 		}

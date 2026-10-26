@@ -41,8 +41,8 @@ func TestOpenAppliesMigrationsOnce(t *testing.T) {
 			if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 				t.Fatal(err)
 			}
-			if n != 2 {
-				t.Fatalf("schema_migrations = %d lignes, attendu 2", n)
+			if n != 3 {
+				t.Fatalf("schema_migrations = %d lignes, attendu 3", n)
 			}
 		}
 		s.Close()
@@ -176,12 +176,16 @@ func TestSeedTemplateIfEmpty(t *testing.T) {
 	}
 }
 
-func TestTemplateQuestionImportantRoundTrip(t *testing.T) {
+func TestTemplateImportantRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	tpl := model.Template{
 		Sections: []model.TemplateSection{{
 			ID: "s1", Name: "Cuisine", Kind: model.KindRoom, Position: 0,
+			Points: []model.TemplatePoint{
+				{ID: "p1", Label: "Important", Type: model.TypeCase, Weight: 1, Position: 0, Important: true},
+				{ID: "p2", Label: "Secondaire", Type: model.TypeCase, Weight: 1, Position: 1},
+			},
 			Questions: []model.TemplateQuestion{
 				{ID: "q1", Text: "Importante ?", Position: 0, Important: true},
 				{ID: "q2", Text: "Normale ?", Position: 1},
@@ -200,6 +204,10 @@ func TestTemplateQuestionImportantRoundTrip(t *testing.T) {
 		qs := tp.Sections[0].Questions
 		if len(qs) != 2 || !qs[0].Important || qs[1].Important {
 			t.Fatalf("questions = %+v", qs)
+		}
+		ps := tp.Sections[0].Points
+		if len(ps) != 2 || !ps[0].Important || ps[1].Important {
+			t.Fatalf("points = %+v", ps)
 		}
 	}
 }

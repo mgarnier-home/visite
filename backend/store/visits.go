@@ -74,7 +74,7 @@ func (s *Store) CreateVisitExcluding(ctx context.Context, code string, f model.F
 		for _, q := range sec.Questions {
 			if q.Important {
 				other = append(other, model.TemplateQuestion{
-					Text: sec.Name + " : " + q.Text, Position: len(other)})
+					Text: sec.Name + " : " + q.Text, Position: len(other), Important: true})
 			}
 		}
 		matched++
