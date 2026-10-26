@@ -123,6 +123,7 @@ const (
 	TargetPoint TargetKind = iota
 	TargetQuestion
 	TargetRoom
+	TargetVisit // la visite elle-même : l'id de la cible est son code
 )
 
 // ValidSharedValue vérifie qu'une valeur partagée est permise pour la cible.
@@ -171,6 +172,12 @@ func ValidSharedValue(target TargetKind, p *Point, field string, raw json.RawMes
 		}
 		return nil
 	case target == TargetQuestion && field == "answer":
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return invalid("%q doit être un texte", field)
+		}
+		return nil
+	case (target == TargetRoom || target == TargetVisit) && field == "notes":
 		var s string
 		if err := json.Unmarshal(raw, &s); err != nil {
 			return invalid("%q doit être un texte", field)

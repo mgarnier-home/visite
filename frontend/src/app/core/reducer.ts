@@ -36,7 +36,9 @@ export function applyOp(state: VisitState, op: Op): VisitState {
     }
     case 'set_shared': {
       const id = p['target_id'];
-      const known = hasRoom(id) || state.points.some((x) => x.id === id) || state.questions.some((q) => q.id === id);
+      // cible : la visite elle-même (ses notes, par son code), une pièce, un point ou une question
+      const known = id === state.visit.code || hasRoom(id)
+        || state.points.some((x) => x.id === id) || state.questions.some((q) => q.id === id);
       if (!known) return state;
       const sv: SharedValue = {
         target_id: id, field: p['field'] as SharedField, value: p['value'],

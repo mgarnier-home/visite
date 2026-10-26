@@ -115,6 +115,12 @@ export class RoomPage {
   protected readonly comment = computed(
     () => this.state()?.comments.find((c) => c.room_id === this.roomId())?.text ?? '',
   );
+  /** Notes partagées de la pièce et leur dernier auteur (« P2 »), seulement si elles ne sont pas vides. */
+  protected readonly notes = computed(() => {
+    const v = this.sharedByTarget().values.get(this.roomId())?.['notes'];
+    const text = typeof v === 'string' ? v : '';
+    return { text, author: text === '' ? undefined : this.sharedByTarget().authors.get(this.roomId())?.['notes'] };
+  });
   protected readonly area = computed<number | null>(() => {
     const v = this.sharedByTarget().values.get(this.roomId())?.['area_m2'];
     return typeof v === 'number' ? v : null;
@@ -220,7 +226,8 @@ export class RoomPage {
   protected setAsked(questionId: string, asked: boolean): Promise<boolean> {
     return this.setShared(questionId, 'asked', asked);
   }
-  // --- brouillons : texte saisi pas encore enregistré, clé `answer:<id>`, `comment:<roomId>` ou `area:<roomId>`
+  // --- brouillons : texte saisi pas encore enregistré, clé `answer:<id>`, `comment:<roomId>`, `notes:<roomId>`
+  // ou `area:<roomId>`
   private readonly drafts = signal<Readonly<Record<string, string>>>({});
 
   /** Valeur affichée : le brouillon s'il existe (la synchro ne l'écrase pas), sinon l'état. */
@@ -230,7 +237,7 @@ export class RoomPage {
   protected answerKey(questionId: string): string {
     return `answer:${questionId}`;
   }
-  protected roomKey(kind: 'comment' | 'area'): string {
+  protected roomKey(kind: 'comment' | 'notes' | 'area'): string {
     return `${kind}:${this.roomId()}`;
   }
 
@@ -270,9 +277,9 @@ export class RoomPage {
     const id = key.slice(sep + 1);
     const s = this.state();
     let saved = true;
-    if (kind === 'answer') {
-      const current = s?.shared.find((v) => v.target_id === id && v.field === 'answer')?.value;
-      if (text !== (typeof current === 'string' ? current : '')) saved = await this.setShared(id, 'answer', text);
+    if (kind === 'answer' || kind === 'notes') {
+      const current = s?.shared.find((v) => v.target_id === id && v.field === kind)?.value;
+      if (text !== (typeof current === 'string' ? current : '')) saved = await this.setShared(id, kind, text);
     } else if (kind === 'comment') {
       const current = s?.comments.find((c) => c.room_id === id)?.text ?? '';
       if (text !== current) saved = await this.run('set_comment', { room_id: id, text });

@@ -11,7 +11,8 @@ SQLite et un répertoire de photos.
 - Fiche du bien (adresse, prix, surfaces, DPE, agent, etc.) et liste de choses à emporter.
 - Modèle de visite par pièces : notes de 1 à 5, constats, cases à cocher, commentaires et
   questions à poser, avec pièces ajoutables ou masquables.
-- Valeurs partagées entre participants (blocage, coût des travaux, surfaces, réponses).
+- Valeurs partagées entre participants (blocage, coût des travaux, surfaces, réponses, notes
+  libres par pièce et pour la visite).
 - Photos JPEG (2000 px au plus, 10 Mo maximum) rattachées à une pièce.
 - Synthèse : score pondéré sur 5 (N/A exclus), frais de notaire à 7,5 % du prix, export.
 - Utilisable hors ligne.

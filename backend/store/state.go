@@ -93,10 +93,11 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 		FROM shared_values sv
 		LEFT JOIN participants pa ON pa.visit_code = ? AND pa.device_id = sv.device_id
 		WHERE sv.seq > ? AND sv.target_id IN (
-			SELECT id FROM visit_rooms WHERE visit_code = ?
+			SELECT ? -- notes de la visite
+			UNION SELECT id FROM visit_rooms WHERE visit_code = ?
 			UNION SELECT p.id FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = ?
 			UNION SELECT q.id FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = ?)
-		ORDER BY sv.target_id, sv.field`, code, since, code, code, code); err != nil {
+		ORDER BY sv.target_id, sv.field`, code, since, code, code, code, code); err != nil {
 		return st, err
 	}
 

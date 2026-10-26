@@ -120,6 +120,24 @@ func TestStateSharesSharedValues(t *testing.T) {
 	}
 }
 
+// Les notes de la visite (cible : le code) reviennent dans l'état complet et dans /changes.
+func TestStateSharesVisitNotes(t *testing.T) {
+	s := newStateStore(t)
+	before := mustState(t, s, devA, 0).Seq
+	mustApply(t, s, devB, stateOp("n1", ops.TypeSetShared, 1, map[string]any{"target_id": stateCode, "field": "notes", "value": "Rappeler l'agent"}))
+
+	for _, since := range []int64{0, before} {
+		got := mustState(t, s, devA, since)
+		if len(got.Shared) != 1 {
+			t.Fatalf("since=%d : shared = %+v", since, got.Shared)
+		}
+		sv := got.Shared[0]
+		if sv.TargetID != stateCode || sv.Field != "notes" || sv.Value != "Rappeler l'agent" || sv.Author != 2 {
+			t.Errorf("since=%d : shared = %+v", since, sv)
+		}
+	}
+}
+
 func TestChangesSince(t *testing.T) {
 	s := newStateStore(t)
 	st := mustState(t, s, devA, 0)
@@ -338,8 +356,9 @@ func TestStateIsolatedBetweenVisits(t *testing.T) {
 	b := []ops.Op{
 		stateOp("x1", ops.TypeSetShared, 1, map[string]any{"target_id": q2, "field": "answer", "value": "secret visite 2"}),
 		stateOp("x2", ops.TypeSetRating, 1, map[string]any{"point_id": pt2, "value": 1}),
+		stateOp("x3", ops.TypeSetShared, 1, map[string]any{"target_id": code2, "field": "notes", "value": "secret visite 2"}),
 	}
-	if res, _, err := ops.ApplyBatch(ctx, s, code2, devC, b, stateNow); err != nil || res[0].Result != ops.ResultApplied || res[1].Result != ops.ResultApplied {
+	if res, _, err := ops.ApplyBatch(ctx, s, code2, devC, b, stateNow); err != nil || res[0].Result != ops.ResultApplied || res[1].Result != ops.ResultApplied || res[2].Result != ops.ResultApplied {
 		t.Fatalf("lot visite 2 : %+v %v", res, err)
 	}
 	rec := photoRec("ph-v2", &room2, devC)

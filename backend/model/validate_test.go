@@ -220,6 +220,15 @@ func TestValidSharedValue(t *testing.T) {
 		{"area négative", TargetRoom, nil, "area_m2", `-1`, false},
 		{"area point", TargetPoint, noteP, "area_m2", `12`, false},
 		{"champ inconnu", TargetRoom, nil, "foo", `1`, false},
+		{"notes pièce", TargetRoom, nil, "notes", `"Fenêtre fissurée"`, true},
+		{"notes pièce vides", TargetRoom, nil, "notes", `""`, true},
+		{"notes pièce nombre", TargetRoom, nil, "notes", `3`, false},
+		{"notes pièce null", TargetRoom, nil, "notes", `null`, false},
+		{"notes visite", TargetVisit, nil, "notes", `"Rappeler l'agent"`, true},
+		{"notes visite null", TargetVisit, nil, "notes", `null`, false},
+		{"area visite", TargetVisit, nil, "area_m2", `12`, false},
+		{"notes point", TargetPoint, noteP, "notes", `"x"`, false},
+		{"notes question", TargetQuestion, nil, "notes", `"x"`, false},
 	}
 	for _, tt := range tests {
 		err := ValidSharedValue(tt.target, tt.p, tt.field, json.RawMessage(tt.raw))

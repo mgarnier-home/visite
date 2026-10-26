@@ -1,9 +1,10 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Fiche } from '../../core/api.types';
 import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compute';
 import { formatEur } from '../../core/format';
+import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
 import { DateTimeInputComponent } from '../../shared/date-time-input.component';
 import { NumericDirective, NumericMode, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
@@ -18,7 +19,10 @@ interface FicheField {
 /** Classes énergétiques du DPE (même liste que la création, sans importer la page). */
 const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
-/** Fiche du bien : lecture seule, ou formulaire pour le créateur de la visite. */
+/**
+ * Fiche du bien : lecture seule, ou formulaire pour le créateur de la visite. Les notes de la
+ * visite sont modifiables par tous les participants.
+ */
 @Component({
   selector: 'app-fiche-tab',
   imports: [FormsModule, DateTimeInputComponent, NumericDirective],
@@ -56,6 +60,21 @@ export class FicheTabComponent {
   protected readonly editable = computed(() => !!this.state()?.visit.is_creator);
   protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
 
+  /** Notes partagées de la visite (cible : son code) et leur dernier auteur, s'il y a du texte. */
+  protected readonly notes = computed(() => {
+    const s = this.state();
+    const v = s?.shared.find((x) => x.target_id === s.visit.code && x.field === 'notes');
+    const text = typeof v?.value === 'string' ? v.value : '';
+    return { text, author: text === '' ? undefined : v?.author };
+  });
+  /** Saisie des notes pas encore enregistrée : la synchro ne l'écrase pas. */
+  protected readonly notesDraft = signal<string | null>(null);
+
+  constructor() {
+    onPageHidden(() => void this.saveNotes());
+    inject(DestroyRef).onDestroy(() => void this.saveNotes());
+  }
+
   protected readonly computedRows = computed(() => {
     const s = this.state();
     if (!s) return [];
@@ -74,6 +93,26 @@ export class FicheTabComponent {
       { id: 'real-price', label: 'Prix réel', value: real === null ? '—' : formatEur(real) },
     ];
   });
+
+  protected onNotesInput(event: Event): void {
+    this.notesDraft.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  /** Enregistre la saisie des notes si elle diffère de l'état ; gardée à l'écran en cas d'échec. */
+  protected async saveNotes(): Promise<void> {
+    const text = this.notesDraft();
+    const code = this.state()?.visit.code;
+    if (text === null || !code) return;
+    if (text !== this.notes().text) {
+      try {
+        await this.sync.dispatch('set_shared', { target_id: code, field: 'notes', value: text });
+      } catch {
+        this.snack.open('Modification non enregistrée', 'OK', { duration: 5000 });
+        return;
+      }
+    }
+    if (this.notesDraft() === text) this.notesDraft.set(null);
+  }
 
   /** Valeur de lecture seule d'un champ. */
   protected display(field: FicheField): string {

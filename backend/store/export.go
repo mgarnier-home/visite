@@ -77,10 +77,11 @@ func (s *Store) ExportData(ctx context.Context, code string) (export.Data, error
 		var v sharedRow
 		return v, r.Scan(&v.target, &v.field, &v.value)
 	}, `SELECT target_id, field, value FROM shared_values WHERE target_id IN (
-			SELECT id FROM visit_rooms WHERE visit_code = ?
+			SELECT ? -- notes de la visite
+			UNION SELECT id FROM visit_rooms WHERE visit_code = ?
 			UNION SELECT p.id FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = ?
 			UNION SELECT q.id FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = ?)`,
-		code, code, code)
+		code, code, code, code)
 	if err != nil {
 		return d, err
 	}

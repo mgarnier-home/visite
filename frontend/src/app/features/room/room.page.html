@@ -40,6 +40,17 @@
     </header>
 
     <label class="field">
+      <span>
+        Notes (partagées)
+        @if (notes().author !== undefined) {
+          <span class="author" data-test="room-notes-author">P{{ notes().author }}</span>
+        }
+      </span>
+      <textarea data-test="room-notes" rows="3" [value]="shown(roomKey('notes'), notes().text)" [disabled]="closed()"
+        (input)="onInput(roomKey('notes'), $event)" (blur)="onBlur(roomKey('notes'), $event)"></textarea>
+    </label>
+
+    <label class="field">
       <span>Surface mesurée (m²)</span>
       <input
         type="text"
