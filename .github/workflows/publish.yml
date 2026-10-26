@@ -3,16 +3,18 @@ name: Publication
 run-name: Publication de ${{ github.ref_name }}
 
 # Lancé par le push d'un tag de version (ex. v1.2.3). Le motif ci-dessous est large : le job
-# « version » vérifie le format exact avant toute construction.
+# « version » vérifie le format exact et que le tag est sur main avant toute construction.
 on:
   push:
     tags:
       - "v*.*.*"
 
-# Deux publications du même tag se marcheraient dessus : la seconde attend la fin de la première
-# au lieu de l'annuler (une publication interrompue laisserait des images à moitié poussées).
+# Une seule publication à la fois : les images intermédiaires « amd64 » et « arm64 » sont
+# communes à toutes les versions, deux publications en parallèle pourraient se les échanger.
+# La suivante attend au lieu d'annuler (une publication interrompue laisserait des images à
+# moitié poussées).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 permissions:
@@ -21,20 +23,30 @@ permissions:
 jobs:
   version:
     name: Vérification du tag
-    runs-on: ubuntu-latest
+    runs-on: linux/amd64
     outputs:
       version: ${{ steps.check.outputs.version }}
       date: ${{ steps.check.outputs.date }}
     steps:
+      # Historique complet pour pouvoir vérifier que le commit du tag appartient à main.
+      - name: Récupération du code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       # Le nom du tag passe par une variable d'environnement, jamais par interpolation directe
       # dans le script : un nom de tag malveillant ne peut ainsi pas injecter de commande.
-      - name: Vérification du format vX.Y.Z
+      - name: Vérification du format vX.Y.Z et de la présence sur main
         id: check
         env:
           TAG: ${{ github.ref_name }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Tag invalide « $TAG » : format attendu vX.Y.Z (ex. v1.2.3)."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Le tag « $TAG » ne pointe pas sur un commit de main."
             exit 1
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
@@ -61,13 +73,9 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           BUILD_DATE: ${{ needs.version.outputs.date }}
           COMMIT: ${{ github.sha }}
-        # Le tag « <version>-<arch> » est propre à cette publication : la fusion part de lui, si
-        # bien qu'un autre tag publié en même temps (qui réécrit « <arch> ») ne peut pas glisser
-        # son image dans cette version.
         run: |
           docker buildx build \
             --tag "mgarnier11/visite:$ARCH" \
-            --tag "mgarnier11/visite:$VERSION-$ARCH" \
             --build-arg "VERSION=v$VERSION" \
             --build-arg "COMMIT=$COMMIT" \
             --build-arg "DATE=$BUILD_DATE" \
@@ -88,5 +96,5 @@ jobs:
           docker buildx imagetools create \
             --tag "mgarnier11/visite:$VERSION" \
             --tag mgarnier11/visite:latest \
-            "mgarnier11/visite:$VERSION-amd64" \
-            "mgarnier11/visite:$VERSION-arm64"
+            mgarnier11/visite:amd64 \
+            mgarnier11/visite:arm64
