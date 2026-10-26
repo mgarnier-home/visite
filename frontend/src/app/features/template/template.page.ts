@@ -149,8 +149,6 @@ export class TemplatePage implements OnInit {
       section.kind = kind;
       // le poids n'est éditable que dans un bilan, mais le serveur exige un poids > 0 partout
       if (kind !== 'summary') section.points.forEach((p) => (p.weight = 1));
-      // « Importante » n'existe que dans une pièce
-      if (kind !== 'room') section.questions.forEach((q) => (q.important = false));
     });
     if (kind !== 'summary') {
       const ids = new Set(this.draft()!.sections[si].points.map((p) => p.id));
@@ -187,7 +185,9 @@ export class TemplatePage implements OnInit {
   protected addPoint(si: number): void {
     this.edit((t) => {
       const points = t.sections[si].points;
-      points.push({ id: crypto.randomUUID(), label: '', type: 'note', options: [], weight: 1, position: points.length });
+      points.push({
+        id: crypto.randomUUID(), label: '', type: 'note', options: [], weight: 1, position: points.length, important: true,
+      });
     });
   }
 
@@ -201,6 +201,10 @@ export class TemplatePage implements OnInit {
       point.type = type;
       if (type !== 'constat') point.options = [];
     });
+  }
+
+  protected setPointImportant(si: number, pi: number, important: boolean): void {
+    this.edit((t) => (t.sections[si].points[pi].important = important));
   }
 
   protected setPointWeight(si: number, pi: number, raw: string): void {
@@ -244,7 +248,7 @@ export class TemplatePage implements OnInit {
   protected addQuestion(si: number): void {
     this.edit((t) => {
       const questions = t.sections[si].questions;
-      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length, important: false });
+      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length, important: true });
     });
   }
 

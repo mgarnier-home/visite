@@ -50,62 +50,96 @@
         (input)="onInput(roomKey('notes'), $event)" (blur)="onBlur(roomKey('notes'), $event)"></textarea>
     </label>
 
-    <label class="field">
-      <span>Surface mesurée (m²)</span>
-      <input
-        type="text"
-        appNumeric="decimal"
-        data-test="area"
-        [value]="shown(roomKey('area'), formatNumeric(area()))"
+    <ng-template #pointTpl let-p>
+      <app-point-card
+        [point]="p.point"
+        [myRating]="p.rating"
+        [shared]="p.shared"
+        [authors]="p.authors"
         [disabled]="closed()"
-        (input)="onInput(roomKey('area'), $event)"
-        (blur)="onBlur(roomKey('area'), $event)"
+        (rate)="rate(p.point.id, $event)"
+        (setValue)="setShared(p.point.id, 'value', $event)"
+        (setBlocking)="setShared(p.point.id, 'blocking', $event)"
+        (setWorks)="setShared(p.point.id, 'works_eur', $event)"
       />
-    </label>
-
-    <div class="points">
-      @for (p of points(); track p.point.id) {
-        <app-point-card
-          [point]="p.point"
-          [myRating]="p.rating"
-          [shared]="p.shared"
-          [authors]="p.authors"
+    </ng-template>
+    <ng-template #questionTpl let-q>
+      <article class="question">
+        <mat-checkbox
+          data-test="asked"
+          [checked]="q.asked"
           [disabled]="closed()"
-          (rate)="rate(p.point.id, $event)"
-          (setValue)="setShared(p.point.id, 'value', $event)"
-          (setBlocking)="setShared(p.point.id, 'blocking', $event)"
-          (setWorks)="setShared(p.point.id, 'works_eur', $event)"
-        />
-      }
-    </div>
+          (change)="setAsked(q.question.id, $event.checked)"
+        >{{ q.question.text }} <span class="hint">(posée)</span></mat-checkbox>
+        <textarea
+          data-test="answer"
+          rows="2"
+          aria-label="Réponse"
+          placeholder="Réponse"
+          [value]="shown(answerKey(q.question.id), q.answer)"
+          [disabled]="closed()"
+          (input)="onInput(answerKey(q.question.id), $event)"
+          (blur)="onBlur(answerKey(q.question.id), $event)"
+        ></textarea>
+        @if (q.answerAuthor !== undefined) {
+          <span class="author" data-test="answer-author">P{{ q.answerAuthor }}</span>
+        }
+      </article>
+    </ng-template>
 
-    @if (questions().length > 0) {
-      <h3>Questions</h3>
-      <div class="questions">
-        @for (q of questions(); track q.question.id) {
-          <article class="question">
-            <mat-checkbox
-              data-test="asked"
-              [checked]="q.asked"
-              [disabled]="closed()"
-              (change)="setAsked(q.question.id, $event.checked)"
-            >{{ q.question.text }} <span class="hint">(posée)</span></mat-checkbox>
-            <textarea
-              data-test="answer"
-              rows="2"
-              aria-label="Réponse"
-              placeholder="Réponse"
-              [value]="shown(answerKey(q.question.id), q.answer)"
-              [disabled]="closed()"
-              (input)="onInput(answerKey(q.question.id), $event)"
-              (blur)="onBlur(answerKey(q.question.id), $event)"
-            ></textarea>
-            @if (q.answerAuthor !== undefined) {
-              <span class="author" data-test="answer-author">P{{ q.answerAuthor }}</span>
-            }
-          </article>
+    @if (mainPoints().length > 0) {
+      <div class="points">
+        @for (p of mainPoints(); track p.point.id) {
+          <ng-container [ngTemplateOutlet]="pointTpl" [ngTemplateOutletContext]="{ $implicit: p }" />
         }
       </div>
+    }
+
+    @if (mainQuestions().length > 0) {
+      <h3>Questions</h3>
+      <div class="questions">
+        @for (q of mainQuestions(); track q.question.id) {
+          <ng-container [ngTemplateOutlet]="questionTpl" [ngTemplateOutletContext]="{ $implicit: q }" />
+        }
+      </div>
+    }
+
+    <button mat-button type="button" class="toggle-secondary" data-test="toggle-secondary" (click)="toggleSecondary()">
+      @if (showSecondary()) {
+        Masquer les questions secondaires
+      } @else {
+        Afficher les questions secondaires ({{ secondaryCount() }})
+      }
+    </button>
+
+    <!-- éléments secondaires : sous le bouton, affichés ou masqués ensemble, remplis ou non -->
+    @if (showSecondary()) {
+      @if (secondaryPoints().length > 0) {
+        <div class="points" data-test="secondary-points">
+          @for (p of secondaryPoints(); track p.point.id) {
+            <ng-container [ngTemplateOutlet]="pointTpl" [ngTemplateOutletContext]="{ $implicit: p }" />
+          }
+        </div>
+      }
+      @if (secondaryQuestions().length > 0) {
+        <div class="questions" data-test="secondary-questions">
+          @for (q of secondaryQuestions(); track q.question.id) {
+            <ng-container [ngTemplateOutlet]="questionTpl" [ngTemplateOutletContext]="{ $implicit: q }" />
+          }
+        </div>
+      }
+      <label class="field">
+        <span>Surface mesurée (m²)</span>
+        <input
+          type="text"
+          appNumeric="decimal"
+          data-test="area"
+          [value]="shown(roomKey('area'), formatNumeric(area()))"
+          [disabled]="closed()"
+          (input)="onInput(roomKey('area'), $event)"
+          (blur)="onBlur(roomKey('area'), $event)"
+        />
+      </label>
     }
 
     <label class="field">

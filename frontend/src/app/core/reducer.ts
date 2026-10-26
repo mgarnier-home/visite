@@ -63,7 +63,7 @@ export function applyOp(state: VisitState, op: Op): VisitState {
       if (!p['note_point_id']) return next;
       const note: Point = {
         id: p['note_point_id'], room_id: id, label: GLOBAL_NOTE_LABEL, type: 'note',
-        options: [], weight: 1, position: 0,
+        options: [], weight: 1, position: 0, important: true,
       };
       return { ...next, points: [...state.points, note] };
     }
@@ -78,14 +78,18 @@ export function applyOp(state: VisitState, op: Op): VisitState {
       const inRoom = state.points.filter((x) => x.room_id === p['room_id']);
       const point: Point = {
         id: p['id'], room_id: p['room_id'], label: p['label'], type: p['type'],
-        options: [...(p['options'] ?? [])], weight: 1, position: maxPosition(inRoom) + 1,
+        // ajouté pendant la visite : important, comme côté serveur
+        options: [...(p['options'] ?? [])], weight: 1, position: maxPosition(inRoom) + 1, important: true,
       };
       return { ...state, points: [...state.points, point] };
     }
     case 'add_question': {
       if (!hasRoom(p['room_id']) || state.questions.some((x) => x.id === p['id'])) return state;
       const inRoom = state.questions.filter((x) => x.room_id === p['room_id']);
-      const q: Question = { id: p['id'], room_id: p['room_id'], text: p['text'], position: maxPosition(inRoom) + 1 };
+      // ajoutée pendant la visite : importante, comme côté serveur
+      const q: Question = {
+        id: p['id'], room_id: p['room_id'], text: p['text'], position: maxPosition(inRoom) + 1, important: true,
+      };
       return { ...state, questions: [...state.questions, q] };
     }
     default:

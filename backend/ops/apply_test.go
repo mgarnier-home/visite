@@ -657,14 +657,23 @@ func TestAddRoomFromSection(t *testing.T) {
 	if p := e.queryInt(`SELECT position FROM visit_rooms WHERE id = ?`, id); p != maxPos+1 {
 		t.Errorf("position = %d, veut %d", p, maxPos+1)
 	}
-	if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, id); n != 9 {
-		t.Errorf("%d points, veut 9 (8 + note globale)", n)
+	if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, id); n != 8 {
+		t.Errorf("%d points, veut 8 (7 + note globale)", n)
 	}
 	if l := e.queryString(`SELECT label FROM visit_points WHERE room_id = ? AND position = 0`, id); l != "Note globale de la pièce" {
 		t.Errorf("premier point = %q", l)
 	}
-	if n := e.queryInt(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ?`, id); n != 4 {
-		t.Errorf("%d questions, veut 4", n)
+	if n := e.queryInt(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ?`, id); n != 3 {
+		t.Errorf("%d questions, veut 3", n)
+	}
+	// l'indicateur « importante » est copié du modèle ; la note globale est importante
+	wantImportant := e.queryInt(`SELECT COUNT(*) FROM template_questions WHERE section_id = 'sec-salle-de-bain' AND important = 1`)
+	if n := e.queryInt(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ? AND important = 1`, id); n != wantImportant {
+		t.Errorf("%d questions importantes, veut %d", n, wantImportant)
+	}
+	wantImportant = e.queryInt(`SELECT COUNT(*) FROM template_points WHERE section_id = 'sec-salle-de-bain' AND important = 1`) + 1
+	if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ? AND important = 1`, id); n != wantImportant || n == 8 {
+		t.Errorf("%d points importants, veut %d (pas tous)", n, wantImportant)
 	}
 	seq := e.visitSeq()
 	if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ? AND seq != ?`, id, seq); n != 0 {
@@ -747,6 +756,9 @@ func TestAddPointAndQuestion(t *testing.T) {
 	if o := e.queryString(`SELECT options FROM visit_points WHERE id = ?`, note); o != "[]" {
 		t.Errorf("options = %q, veut []", o)
 	}
+	if imp := e.queryInt(`SELECT important FROM visit_points WHERE id = ?`, pt); imp != 1 {
+		t.Errorf("point ajouté pendant la visite : important = %d, veut 1", imp)
+	}
 	for name, p := range map[string]map[string]any{
 		"constat sans options": {"id": uuid.NewString(), "room_id": room, "label": "x", "type": "constat", "options": []string{}},
 		"note avec options":    {"id": uuid.NewString(), "room_id": room, "label": "x", "type": "note", "options": []string{"a"}},
@@ -764,6 +776,9 @@ func TestAddPointAndQuestion(t *testing.T) {
 	q := uuid.NewString()
 	if got := e.applyOne(devB, op("add_question", 1, map[string]any{"id": q, "room_id": room, "text": "Âge de la hotte ?"})); got != "applied" {
 		t.Fatalf("add_question : %s", got)
+	}
+	if imp := e.queryInt(`SELECT important FROM visit_questions WHERE id = ?`, q); imp != 1 {
+		t.Errorf("question ajoutée pendant la visite : important = %d, veut 1", imp)
 	}
 	if p := e.queryInt(`SELECT position FROM visit_questions WHERE id = ?`, q); p != maxQ+1 {
 		t.Errorf("position = %d, veut %d", p, maxQ+1)
@@ -950,8 +965,8 @@ func TestAddRoomNotePointID(t *testing.T) {
 		if got := notePoint(e, room); got != note {
 			t.Errorf("note globale = %q, veut %q", got, note)
 		}
-		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, room); n != 9 {
-			t.Errorf("%d points, veut 9", n)
+		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ?`, room); n != 8 {
+			t.Errorf("%d points, veut 8", n)
 		}
 		if n := e.queryInt(`SELECT COUNT(*) FROM visit_points WHERE room_id = ? AND id = ?`, room, note); n != 1 {
 			t.Errorf("l'id imposé est utilisé %d fois", n)

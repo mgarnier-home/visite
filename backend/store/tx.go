@@ -139,9 +139,9 @@ func (t *Tx) Point(id string) (model.Point, string, error) {
 	var p model.Point
 	var code, options string
 	err := t.tx.QueryRowContext(t.ctx,
-		`SELECT p.id, p.room_id, p.label, p.type, p.options, p.weight, p.position, r.visit_code
+		`SELECT p.id, p.room_id, p.label, p.type, p.options, p.weight, p.position, p.important, r.visit_code
 		 FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id WHERE p.id = ?`, id).
-		Scan(&p.ID, &p.RoomID, &p.Label, &p.Type, &options, &p.Weight, &p.Position, &code)
+		Scan(&p.ID, &p.RoomID, &p.Label, &p.Type, &options, &p.Weight, &p.Position, &p.Important, &code)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Point{}, "", ErrNotFound
 	}
@@ -163,9 +163,9 @@ func (t *Tx) Question(id string) (model.Question, string, error) {
 	var q model.Question
 	var code string
 	err := t.tx.QueryRowContext(t.ctx,
-		`SELECT q.id, q.room_id, q.text, q.position, r.visit_code
+		`SELECT q.id, q.room_id, q.text, q.position, q.important, r.visit_code
 		 FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id WHERE q.id = ?`, id).
-		Scan(&q.ID, &q.RoomID, &q.Text, &q.Position, &code)
+		Scan(&q.ID, &q.RoomID, &q.Text, &q.Position, &q.Important, &code)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Question{}, "", ErrNotFound
 	}
@@ -233,18 +233,20 @@ func (t *Tx) InsertPoint(p model.Point, seq int64) error {
 	if err != nil {
 		return err
 	}
+	// ajouté pendant la visite : important (toujours affiché), p.Important est ignoré
 	_, err = t.tx.ExecContext(t.ctx,
-		`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, seq)
-		 SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, ? FROM visit_points WHERE room_id = ?`,
+		`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, important, seq)
+		 SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, 1, ? FROM visit_points WHERE room_id = ?`,
 		p.ID, p.RoomID, p.Label, string(p.Type), string(ob), p.Weight, seq, p.RoomID)
 	return err
 }
 
-// InsertQuestion ajoute la question après la dernière de sa pièce ; q.Position est ignoré.
+// InsertQuestion ajoute la question après la dernière de sa pièce ; q.Position et q.Important
+// sont ignorés : une question ajoutée pendant la visite est importante (toujours affichée).
 func (t *Tx) InsertQuestion(q model.Question, seq int64) error {
 	_, err := t.tx.ExecContext(t.ctx,
-		`INSERT INTO visit_questions (id, room_id, text, position, seq)
-		 SELECT ?, ?, ?, COALESCE(MAX(position), -1) + 1, ? FROM visit_questions WHERE room_id = ?`,
+		`INSERT INTO visit_questions (id, room_id, text, position, important, seq)
+		 SELECT ?, ?, ?, COALESCE(MAX(position), -1) + 1, 1, ? FROM visit_questions WHERE room_id = ?`,
 		q.ID, q.RoomID, q.Text, seq, q.RoomID)
 	return err
 }

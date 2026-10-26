@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -20,13 +21,25 @@ import { AddQuestionDialog } from './add-question.dialog';
 import { ConfirmDialog } from './confirm.dialog';
 import { PointCardComponent } from './point-card.component';
 
+/** Choix « afficher les questions secondaires », gardé sur l'appareil pour toutes les pièces. */
+const SHOW_SECONDARY_KEY = 'visite.show-secondary';
+
+function readShowSecondary(): boolean {
+  try {
+    return localStorage.getItem(SHOW_SECONDARY_KEY) === '1';
+  } catch {
+    return false; // stockage indisponible (navigation privée) : réglage par défaut
+  }
+}
+
 type SharedMap = Partial<Record<SharedField, unknown>>;
+
 type AuthorMap = Partial<Record<SharedField, number>>;
 
 /** Écran d'une pièce : points, questions, commentaire privé et photos. */
 @Component({
   selector: 'app-room-page',
-  imports: [RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, NumericDirective, PhotoButtonComponent, PointCardComponent],
+  imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatCheckboxModule, MatIconModule, NumericDirective, PhotoButtonComponent, PointCardComponent],
   templateUrl: './room.page.html',
   styleUrl: './room.page.scss',
 })
@@ -125,6 +138,28 @@ export class RoomPage {
     const v = this.sharedByTarget().values.get(this.roomId())?.['area_m2'];
     return typeof v === 'number' ? v : null;
   });
+
+  // --- éléments secondaires : points et questions non importants, et surface mesurée. Affichés
+  // sous le bouton, ensemble et à la demande, qu'ils soient remplis ou non.
+  protected readonly showSecondary = signal(readShowSecondary());
+  protected readonly mainPoints = computed(() => this.points().filter((p) => p.point.important));
+  protected readonly secondaryPoints = computed(() => this.points().filter((p) => !p.point.important));
+  protected readonly mainQuestions = computed(() => this.questions().filter((q) => q.question.important));
+  protected readonly secondaryQuestions = computed(() => this.questions().filter((q) => !q.question.important));
+  /** Points et questions secondaires, plus la surface mesurée. */
+  protected readonly secondaryCount = computed(
+    () => this.secondaryPoints().length + this.secondaryQuestions().length + 1,
+  );
+
+  protected toggleSecondary(): void {
+    const next = !this.showSecondary();
+    this.showSecondary.set(next);
+    try {
+      localStorage.setItem(SHOW_SECONDARY_KEY, next ? '1' : '0');
+    } catch {
+      // stockage indisponible : le choix vaut pour cette page seulement
+    }
+  }
 
   // --- renommage
   protected readonly renaming = signal(false);

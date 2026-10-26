@@ -8,6 +8,11 @@
     margin: 0;
     font: var(--mat-sys-title-medium);
   }
+
+  .toggle-secondary {
+    align-self: flex-start;
+    min-height: 48px;
+  }
 }
 
 .pager {

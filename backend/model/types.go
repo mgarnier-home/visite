@@ -35,12 +35,13 @@ type TemplateSection struct {
 }
 
 type TemplatePoint struct {
-	ID       string    `json:"id"`
-	Label    string    `json:"label"`
-	Type     PointType `json:"type"`
-	Options  []string  `json:"options"`
-	Weight   float64   `json:"weight"`
-	Position int       `json:"position"`
+	ID        string    `json:"id"`
+	Label     string    `json:"label"`
+	Type      PointType `json:"type"`
+	Options   []string  `json:"options"`
+	Weight    float64   `json:"weight"`
+	Position  int       `json:"position"`
+	Important bool      `json:"important"`
 }
 
 type TemplateQuestion struct {
@@ -88,21 +89,24 @@ type Room struct {
 	Hidden   bool        `json:"hidden"`
 }
 
+// Point : Important = affiché par défaut dans sa pièce ; sinon point secondaire.
 type Point struct {
-	ID       string    `json:"id"`
-	RoomID   string    `json:"room_id"`
-	Label    string    `json:"label"`
-	Type     PointType `json:"type"`
-	Options  []string  `json:"options"`
-	Weight   float64   `json:"weight"`
-	Position int       `json:"position"`
+	ID        string    `json:"id"`
+	RoomID    string    `json:"room_id"`
+	Label     string    `json:"label"`
+	Type      PointType `json:"type"`
+	Options   []string  `json:"options"`
+	Weight    float64   `json:"weight"`
+	Position  int       `json:"position"`
+	Important bool      `json:"important"`
 }
 
 type Question struct {
-	ID       string `json:"id"`
-	RoomID   string `json:"room_id"`
-	Text     string `json:"text"`
-	Position int    `json:"position"`
+	ID        string `json:"id"`
+	RoomID    string `json:"room_id"`
+	Text      string `json:"text"`
+	Position  int    `json:"position"`
+	Important bool   `json:"important"`
 }
 
 // SharedValue : Author est le numéro du participant.

@@ -16,7 +16,7 @@ function room(id: string, position: number, o: Partial<Room> = {}): Room {
   return { id, name: id, dir_name: id, kind: 'room', position, hidden: false, ...o };
 }
 function point(id: string, room_id: string, position: number, o: Partial<Point> = {}): Point {
-  return { id, room_id, label: id, type: 'note', options: [], weight: 1, position, ...o };
+  return { id, room_id, label: id, type: 'note', options: [], weight: 1, position, important: true, ...o };
 }
 function shared(target_id: string, field: SharedValue['field'], value: unknown): SharedValue {
   return { target_id, field, value, updated_at: 1, author: 1 };
@@ -130,10 +130,10 @@ describe('unaskedCount', () => {
   it('compte les questions non posées des pièces visibles seulement', () => {
     const rooms = [room('r1', 0), room('rh', 1, { hidden: true })];
     const questions = [
-      { id: 'q1', room_id: 'r1', text: '', position: 0 },
-      { id: 'q2', room_id: 'r1', text: '', position: 1 },
-      { id: 'q3', room_id: 'r1', text: '', position: 2 },
-      { id: 'q4', room_id: 'rh', text: '', position: 0 },
+      { id: 'q1', room_id: 'r1', text: '', position: 0, important: true },
+      { id: 'q2', room_id: 'r1', text: '', position: 1, important: true },
+      { id: 'q3', room_id: 'r1', text: '', position: 2, important: true },
+      { id: 'q4', room_id: 'rh', text: '', position: 0, important: true },
     ];
     const sh = [shared('q1', 'asked', true), shared('q2', 'asked', false)];
     expect(unaskedCount(state({ rooms, questions, shared: sh }))).toBe(2);

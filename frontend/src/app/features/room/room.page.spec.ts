@@ -1,5 +1,5 @@
 import { ApplicationRef, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, convertToParamMap, ParamMap, Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
@@ -10,10 +10,12 @@ import { getDeviceId } from '../../core/device-id';
 import { LocalStore } from '../../core/local-store';
 import { SyncService, SyncStatus } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
+import { By } from '@angular/platform-browser';
+import { PointCardComponent } from './point-card.component';
 import { RoomPage } from './room.page';
 
 const point = (id: string, room_id: string, over: Partial<Point> = {}): Point =>
-  ({ id, room_id, label: `Point ${id}`, type: 'note', options: [], weight: 1, position: 0, ...over });
+  ({ id, room_id, label: `Point ${id}`, type: 'note', options: [], weight: 1, position: 0, important: true, ...over }) as Point;
 
 function makeState(closed = false): VisitState {
   return {
@@ -25,19 +27,32 @@ function makeState(closed = false): VisitState {
       { id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false },
       { id: 'r3', name: 'Cave', dir_name: 'cave', kind: 'room', position: 3, hidden: true },
       { id: 'r4', name: 'Garage', dir_name: 'garage', kind: 'room', position: 4, hidden: false },
+      { id: 'r5', name: 'Questions générales', dir_name: 'questions-generales', kind: 'topic', position: 5, hidden: false },
     ],
     points: [
       point('p1', 'r1', { type: 'case' }),
       point('p2', 'r1', { position: 1 }),
+      point('p3', 'r1', { position: 2, type: 'case', important: false }), // secondaire, vide : masqué
+      point('p4', 'r1', { position: 3, type: 'case', important: false }), // secondaire, bloquant : affiché
+      point('p5', 'r1', { position: 4, important: false }), // secondaire, noté : affiché
       point('c1', 'r2'),
     ],
-    questions: [{ id: 'q1', room_id: 'r1', text: 'Quel chauffage ?', position: 0 }],
+    questions: [
+      { id: 'q1', room_id: 'r1', text: 'Quel chauffage ?', position: 0, important: true },
+      { id: 'q2', room_id: 'r1', text: 'Âge des volets ?', position: 1, important: false },
+      { id: 'q3', room_id: 'r1', text: 'Exposition ?', position: 2, important: false },
+      { id: 'q4', room_id: 'r1', text: 'Cheminée ramonée ?', position: 3, important: false },
+      { id: 'q5', room_id: 'r5', text: 'Raison de la vente ?', position: 0, important: false },
+    ],
     shared: [
       { target_id: 'q1', field: 'answer', value: 'Gaz', updated_at: 1, author: 2 },
+      { target_id: 'q3', field: 'answer', value: 'Sud', updated_at: 1, author: 2 },
+      { target_id: 'q4', field: 'asked', value: true, updated_at: 1, author: 2 },
+      { target_id: 'p4', field: 'blocking', value: true, updated_at: 1, author: 2 },
       { target_id: 'r1', field: 'area_m2', value: 20, updated_at: 1, author: 2 },
       { target_id: 'r1', field: 'notes', value: 'Prévoir rideaux', updated_at: 1, author: 3 },
     ],
-    ratings: [],
+    ratings: [{ point_id: 'p5', value: 3, updated_at: 1 }],
     comments: [{ room_id: 'r1', text: 'Lumineux', updated_at: 1 }],
     photos: [
       { id: 'ph-local', room_id: 'r1', author: 1, taken_at: 'x' },
@@ -58,6 +73,7 @@ describe('RoomPage', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    localStorage.clear();
     params = new BehaviorSubject(convertToParamMap({ roomId: 'r1' }));
     sync.dispatch.mockResolvedValue(undefined);
     api.photoUrl.mockImplementation((c: string, id: string, d: string) => `/api/${c}/${id}?d=${d}`);
@@ -97,10 +113,14 @@ describe('RoomPage', () => {
   };
   const q = <T extends HTMLElement>(el: HTMLElement, sel: string) => el.querySelector(sel) as T;
 
+  /** Les éléments secondaires (dont la surface) affichés dès l'ouverture de la page. */
+  const showingSecondary = () => localStorage.setItem('visite.show-secondary', '1');
+
   it('affiche les points de la pièce, ses questions et ses valeurs', async () => {
+    showingSecondary();
     const { el } = await setup();
     expect(q(el, '[data-test=room-name]').textContent).toContain('Salon');
-    expect(el.querySelectorAll('app-point-card').length).toBe(2);
+    expect(el.querySelectorAll('app-point-card').length).toBe(5);
     expect(q<HTMLTextAreaElement>(el, '[data-test=answer]').value).toBe('Gaz');
     expect(q<HTMLTextAreaElement>(el, '[data-test=comment]').value).toBe('Lumineux');
     expect(q<HTMLInputElement>(el, '[data-test=area]').value).toBe('20');
@@ -113,7 +133,7 @@ describe('RoomPage', () => {
     s.shared[0] = { ...s.shared[0], value: '' };
     state.set(s);
     await settle(fixture);
-    expect(el.querySelector('.question [data-test=answer-author]')).toBeNull();
+    expect(q(el, '.question').querySelector('[data-test=answer-author]')).toBeNull(); // q1
   });
 
   it('notes partagées : affichées avec leur auteur, enregistrées à la perte du focus si modifiées', async () => {
@@ -137,6 +157,57 @@ describe('RoomPage', () => {
     expect(el.querySelector('[data-test=room-notes-author]')).toBeNull();
   });
 
+  const questionTexts = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('.question mat-checkbox')).map((c) => c.textContent?.replace('(posée)', '').trim());
+
+  const pointIds = (fixture: ComponentFixture<RoomPage>) =>
+    fixture.debugElement.queryAll(By.directive(PointCardComponent)).map((d) => (d.componentInstance as PointCardComponent).point().id);
+
+  it('éléments secondaires : masqués par défaut même remplis, affichés ensemble sous le bouton', async () => {
+    const { fixture, el } = await setup();
+    // q3 (répondue), q4 (posée), p4 (bloquant), p5 (noté) et la surface (renseignée) sont masqués aussi
+    expect(questionTexts(el)).toEqual(['Quel chauffage ?']);
+    expect(pointIds(fixture)).toEqual(['p1', 'p2']);
+    expect(el.querySelector('[data-test=area]')).toBeNull();
+    const toggle = q<HTMLButtonElement>(el, '[data-test=toggle-secondary]');
+    expect(toggle.textContent?.trim()).toBe('Afficher les questions secondaires (7)'); // 3 points, 3 questions, surface
+    toggle.click();
+    await settle(fixture);
+    expect(questionTexts(el)).toEqual(['Quel chauffage ?', 'Âge des volets ?', 'Exposition ?', 'Cheminée ramonée ?']);
+    expect(pointIds(fixture)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+    expect(toggle.textContent?.trim()).toBe('Masquer les questions secondaires');
+    // tous sous le bouton
+    for (const sel of ['[data-test=secondary-points]', '[data-test=secondary-questions]', '[data-test=area]']) {
+      expect(toggle.compareDocumentPosition(q(el, sel)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(q(el, '[data-test=secondary-points]').querySelectorAll('app-point-card').length).toBe(3);
+    expect(q(el, '[data-test=secondary-questions]').querySelectorAll('.question').length).toBe(3);
+  });
+
+  it('questions secondaires : le choix est mémorisé sur l\'appareil', async () => {
+    const first = await setup();
+    q<HTMLButtonElement>(first.el, '[data-test=toggle-secondary]').click();
+    await settle(first.fixture);
+    first.fixture.destroy();
+    const { el } = await setup();
+    expect(questionTexts(el)).toContain('Âge des volets ?');
+  });
+
+  it('pièce sans élément secondaire : le bouton ne montre que la surface ; pièce thématique : masquage aussi', async () => {
+    params.next(convertToParamMap({ roomId: 'r4' }));
+    const { fixture, el } = await setup();
+    const toggle = q<HTMLButtonElement>(el, '[data-test=toggle-secondary]');
+    expect(toggle.textContent?.trim()).toBe('Afficher les questions secondaires (1)');
+    toggle.click();
+    await settle(fixture);
+    expect(el.querySelector('[data-test=area]')).not.toBeNull();
+    toggle.click();
+    params.next(convertToParamMap({ roomId: 'r5' }));
+    await settle(fixture);
+    expect(questionTexts(el)).toEqual([]);
+    expect(q(el, '[data-test=toggle-secondary]').textContent?.trim()).toBe('Afficher les questions secondaires (2)');
+  });
+
   it('un clic sur un bouton de note dispatche set_rating ; une case dispatche set_shared value', async () => {
     const { el } = await setup();
     const cards = el.querySelectorAll('app-point-card');
@@ -157,6 +228,7 @@ describe('RoomPage', () => {
   });
 
   it('commentaire et surface : enregistrés à la perte du focus si modifiés', async () => {
+    showingSecondary();
     const { el } = await setup();
     const comment = q<HTMLTextAreaElement>(el, '[data-test=comment]');
     comment.dispatchEvent(new Event('blur'));
@@ -175,6 +247,7 @@ describe('RoomPage', () => {
     const withArea = makeState();
     withArea.shared.find((v) => v.target_id === 'r1' && v.field === 'area_m2')!.value = 22.5;
     state.set(withArea);
+    showingSecondary();
     const { el } = await setup();
     const area = q<HTMLInputElement>(el, '[data-test=area]');
     expect(area.value).toBe('22,5');
@@ -184,6 +257,7 @@ describe('RoomPage', () => {
   });
 
   it('surface : une virgule seule n\'envoie rien et rétablit la valeur affichée', async () => {
+    showingSecondary();
     const { el } = await setup();
     const area = q<HTMLInputElement>(el, '[data-test=area]');
     area.value = ',';
@@ -248,6 +322,7 @@ describe('RoomPage', () => {
 
   it('visite clôturée : tout est désactivé', async () => {
     state.set(makeState(true));
+    showingSecondary();
     const { el } = await setup();
     const controls = Array.from(el.querySelectorAll<HTMLButtonElement>('[data-test=choice], [data-test=add-point], [data-test=add-question], [data-test=hide], [data-test=photo-btn], [data-test=rename]'));
     expect(controls.length).toBeGreaterThan(5);

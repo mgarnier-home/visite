@@ -8,8 +8,10 @@ export interface TemplateSection {
   id: string; name: string; kind: SectionKind; position: number;
   points: TemplatePoint[]; questions: TemplateQuestion[];
 }
+/** important : affiché par défaut dans la pièce ; sinon point secondaire. */
 export interface TemplatePoint {
   id: string; label: string; type: PointType; options: string[]; weight: number; position: number;
+  important: boolean;
 }
 export interface TemplateQuestion { id: string; text: string; position: number; important: boolean }
 
@@ -29,11 +31,12 @@ export interface VisitInfo {
 export interface Room {
   id: string; name: string; dir_name: string; kind: SectionKind; position: number; hidden: boolean;
 }
+/** important : affiché(e) par défaut dans sa pièce ; sinon point ou question secondaire. */
 export interface Point {
   id: string; room_id: string; label: string; type: PointType; options: string[];
-  weight: number; position: number;
+  weight: number; position: number; important: boolean;
 }
-export interface Question { id: string; room_id: string; text: string; position: number }
+export interface Question { id: string; room_id: string; text: string; position: number; important: boolean }
 export type SharedField = 'value' | 'blocking' | 'works_eur' | 'answer' | 'asked' | 'area_m2' | 'notes';
 export interface SharedValue {
   target_id: string; field: SharedField; value: unknown; updated_at: number;

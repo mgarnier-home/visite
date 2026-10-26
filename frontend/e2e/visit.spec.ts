@@ -9,7 +9,7 @@ const KITCHEN = 'Cuisine';
 const BRIGHTNESS = 'Luminosité';
 const WATER = "Pression d'eau et temps d'arrivée de l'eau chaude";
 const EQUIPPED = 'La cuisine est-elle vendue équipée ?';
-const GAS = "Plaques au gaz ou à l'électricité ?";
+const REDONE = 'La cuisine a-t-elle été refaite ?';
 
 let counter = 0;
 /** Code de visite unique pour chaque test. */
@@ -183,6 +183,30 @@ test.describe('visite à deux participants', () => {
     await expect(a.locator('[data-test=visit-notes-author]')).toHaveText('P2', { timeout: 10_000 });
   });
 
+  test('secondary questions are shown below the toggle, even answered ones stay hidden until shown', async ({ browser }) => {
+    p = await startVisit(browser, uniqueCode());
+    const { a, b } = p;
+    const OPEN_KITCHEN = 'Peut-on ouvrir la cuisine sur le séjour';
+    await openRoom(a, KITCHEN);
+    await openRoom(b, KITCHEN);
+
+    await expect(question(a, EQUIPPED)).toBeVisible();
+    await expect(question(a, OPEN_KITCHEN)).toHaveCount(0);
+    await expect(a.locator('[data-test=area]')).toHaveCount(0);
+    await a.locator('[data-test=toggle-secondary]').click();
+    await expect(a.locator('[data-test=area]')).toBeVisible();
+    await sent(a, () => answer(a, OPEN_KITCHEN, 'Non, mur porteur'));
+
+    // répondue par A, elle reste masquée chez B tant qu'il n'affiche pas les questions secondaires :
+    // trois points, deux questions et la surface
+    const toggleB = b.locator('[data-test=toggle-secondary]');
+    await expect(toggleB).toHaveText('Afficher les questions secondaires (6)');
+    await nextPull(b);
+    await expect(question(b, OPEN_KITCHEN)).toHaveCount(0);
+    await toggleB.click();
+    await expect(question(b, OPEN_KITCHEN).locator('[data-test=answer]')).toHaveValue('Non, mur porteur', { timeout: 10_000 });
+  });
+
   test('offline edits sync on reconnect', async ({ browser }) => {
     p = await startVisit(browser, uniqueCode());
     const { a, b, contextB } = p;
@@ -192,8 +216,8 @@ test.describe('visite à deux participants', () => {
     await contextB.setOffline(true);
     await expect(syncLabel(b)).toHaveText('Hors ligne');
     await choice(pointCard(b, WATER), 'OK').click();
-    const text = 'Électricité, pas de gaz';
-    await answer(b, GAS, text);
+    const text = 'Oui, en 2019, factures disponibles';
+    await answer(b, REDONE, text);
     await expect(b.locator('[data-test=sync-pending]')).toHaveText(
       '2 modifications et 0 photo en attente',
     );
@@ -204,7 +228,7 @@ test.describe('visite à deux participants', () => {
     const water = pointCard(a, WATER);
     await expect(choice(water, 'OK')).toHaveAttribute('aria-pressed', 'true');
     await expect(water.locator('[data-test=author]')).toHaveText('P2');
-    await expect(question(a, GAS).locator('[data-test=answer]')).toHaveValue(text);
+    await expect(question(a, REDONE).locator('[data-test=answer]')).toHaveValue(text);
   });
 
   test('offline photo uploads later', async ({ browser }) => {
@@ -249,7 +273,7 @@ test.describe('visite à deux participants', () => {
     const other = rooms.filter({ hasText: 'Autres questions' });
     await expect(other.locator('[data-test=progress]')).toHaveText('0 / 3 posées');
     const general = rooms.filter({ hasText: 'Questions générales' });
-    await expect(general.locator('[data-test=progress]')).toHaveText('0 / 18 posées');
+    await expect(general.locator('[data-test=progress]')).toHaveText('0 / 15 posées');
 
     await openRoom(a, 'Autres questions');
     await expect(question(a, 'Garage : La fibre est-elle raccordée ?')).toBeVisible();

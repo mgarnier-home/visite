@@ -24,7 +24,7 @@ function baseState(): VisitState {
       packing_list: '', participants: 1,
     },
     rooms: [{ id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 0, hidden: false }],
-    points: [{ id: 'p1', room_id: 'r1', label: 'Note', type: 'note', options: [], weight: 1, position: 0 }],
+    points: [{ id: 'p1', room_id: 'r1', label: 'Note', type: 'note', options: [], weight: 1, position: 0, important: true }],
     questions: [], shared: [], ratings: [], comments: [], photos: [],
   };
 }

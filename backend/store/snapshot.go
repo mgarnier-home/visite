@@ -53,8 +53,8 @@ func copySection(tx *sql.Tx, code string, sec model.TemplateSection, roomID, nam
 	offset := 0
 	if sec.Kind == model.KindRoom || sec.Kind == model.KindPerBedroom {
 		if _, err := tx.Exec(
-			`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, seq)
-			 VALUES (?, ?, ?, ?, '[]', 1, 0, ?)`,
+			`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, important, seq)
+			 VALUES (?, ?, ?, ?, '[]', 1, 0, 1, ?)`,
 			notePointID, roomID, globalNoteLabel, string(model.TypeNote), seq); err != nil {
 			return err
 		}
@@ -70,16 +70,16 @@ func copySection(tx *sql.Tx, code string, sec model.TemplateSection, roomID, nam
 			return err
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, seq)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			uuid.NewString(), roomID, p.Label, string(p.Type), string(ob), p.Weight, i+offset, seq); err != nil {
+			`INSERT INTO visit_points (id, room_id, label, type, options, weight, position, important, seq)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			uuid.NewString(), roomID, p.Label, string(p.Type), string(ob), p.Weight, i+offset, p.Important, seq); err != nil {
 			return err
 		}
 	}
 	for _, q := range sec.Questions {
 		if _, err := tx.Exec(
-			`INSERT INTO visit_questions (id, room_id, text, position, seq) VALUES (?, ?, ?, ?, ?)`,
-			uuid.NewString(), roomID, q.Text, q.Position, seq); err != nil {
+			`INSERT INTO visit_questions (id, room_id, text, position, important, seq) VALUES (?, ?, ?, ?, ?, ?)`,
+			uuid.NewString(), roomID, q.Text, q.Position, q.Important, seq); err != nil {
 			return err
 		}
 	}

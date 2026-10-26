@@ -116,8 +116,12 @@ moment du déploiement et ajoutées à `/mnt/secrets` seulement avec l'accord du
   - `summary` : le bilan, instancié une fois.
 - `template_points` : `id`, `section_id`, `label`, `type` (`note`, `constat`, `case`),
   `options` (liste JSON, obligatoire et non vide pour `constat`, vide sinon), `weight` (réel,
-  utilisé seulement dans la section `summary`, défaut 1), `position`.
-- `template_questions` : `id`, `section_id`, `text`, `position`.
+  utilisé seulement dans la section `summary`, défaut 1), `position`, `important`.
+- `template_questions` : `id`, `section_id`, `text`, `position`, `important`.
+
+Un point ou une question **important** s'affiche par défaut dans sa pièce ; les autres sont
+**secondaires**. Une question importante d'une pièce décochée à la création est aussi reprise dans
+« Autres questions ».
 
 Une section `per_bedroom` n'a pas de questions : elles seraient répétées pour chaque chambre. Les
 questions sur les chambres de la checklist vont dans « Questions générales » (annexe A).
@@ -130,8 +134,11 @@ questions sur les chambres de la checklist vont dans « Questions générales »
   `agent_name`, `agent_phone`, `agent_email`, `construction_year`, `dpe_energy` (A à G),
   `dpe_ges` (A à G), `rooms_count`, `bedrooms_count`, `listing_url`, `heating_type`.
 - `visit_rooms` : `id` (UUID), `visit_code`, `name`, `dir_name`, `kind`, `position`, `hidden`.
-- `visit_points` : `id` (UUID), `room_id`, `label`, `type`, `options`, `weight`, `position`.
-- `visit_questions` : `id` (UUID), `room_id`, `text`, `position`.
+- `visit_points` : `id` (UUID), `room_id`, `label`, `type`, `options`, `weight`, `position`,
+  `important` (copié du modèle ; vrai pour la note globale et pour un point ajouté pendant la
+  visite).
+- `visit_questions` : `id` (UUID), `room_id`, `text`, `position`, `important` (copié du modèle ;
+  vrai pour les questions de « Autres questions » et pour une question ajoutée pendant la visite).
 - `participants` : `visit_code`, `device_id`, `number`, `joined_at`.
 
 À la création, le serveur copie le modèle dans `visit_rooms`, `visit_points` et
@@ -300,12 +307,19 @@ refusée n'empêche pas les suivantes.
    - **Bilan** : mes notes des critères pondérés, mon score pondéré, points bloquants, total
      des travaux, prix réel, alerte sur les questions non posées, boutons « Exporter le CSV »,
      « Copier pour Sheets » et, pour le créateur, « Clôturer ».
-4. **Pièce** : notes partagées en tête, surface mesurée, points (une carte par type : 5 boutons et N/A pour `note` ;
+4. **Pièce** : notes partagées en tête, points (une carte par type : 5 boutons et N/A pour `note` ;
    OK / Problème / N/A pour `case` ; pastilles d'options et N/A pour `constat`), menu « ⋯ »
    par point pour le drapeau bloquant et les travaux, auteur affiché sur les valeurs partagées
    (« P2 »), questions avec case « posée » et réponse, mon commentaire, photos (vignettes et
-   bouton appareil photo), ajout d'un point ou d'une question, navigation précédente / suivante.
-5. **Modèle** : édition des sections, points (type, options, poids) et questions, réordonnancement,
+   bouton appareil photo), ajout d'un point ou d'une question, navigation précédente /
+   suivante. Les points et questions importants s'affichent d'abord, puis un bouton « Afficher
+   les questions secondaires (n) ». Les éléments secondaires (points et questions non
+   importants, surface mesurée) s'affichent sous ce bouton, tous ensemble et à la demande,
+   remplis ou non ; ce choix est gardé sur l'appareil (`localStorage`) pour toutes les pièces.
+   Le bilan, les points bloquants, les travaux et l'export tiennent compte de tous les
+   éléments, secondaires compris.
+5. **Modèle** : édition des sections, points (type, options, poids, « Important ») et questions
+   (« Importante »), réordonnancement,
    enregistrement avec gestion du `409`.
 
 Une visite clôturée s'affiche en lecture seule.
@@ -384,6 +398,10 @@ la base, mot de passe de visite, prénom des participants, carte des maisons vis
 visite liée à la première, notes vocales.
 
 ## Annexe A — modèle initial
+
+Contenu de la v1, gardé pour l'historique : le modèle a depuis évolué (retours 1, puis pièce
+« Combles » et éléments secondaires). Le contenu à jour est `backend/seed/template.json`, décrit
+par `backend/seed/seed_test.go`.
 
 Repris de `checklist-visite-maison.md`. Types : **N** = `note`, **C** = `case`, **K** =
 `constat` (options entre parenthèses). Chaque section `room` et `per_bedroom` reçoit aussi le

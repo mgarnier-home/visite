@@ -10,7 +10,7 @@ import { provideAppIcons } from '../../shared/icons';
 import { RoomsTabComponent } from './rooms-tab.component';
 
 const point = (id: string, room_id: string): Point =>
-  ({ id, room_id, label: id, type: 'note', options: [], weight: 1, position: 0 });
+  ({ id, room_id, label: id, type: 'note', options: [], weight: 1, position: 0, important: true });
 
 function makeState(over: { closed?: boolean; packing?: string } = {}): VisitState {
   const points = Array.from({ length: 9 }, (_, i) => point(`p${i}`, 'r1'));

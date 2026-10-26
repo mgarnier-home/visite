@@ -50,7 +50,7 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 	if st.Points, err = queryAll(ctx, tx, func(r *sql.Rows) (model.Point, error) {
 		var v model.Point
 		var options string
-		if err := r.Scan(&v.ID, &v.RoomID, &v.Label, &v.Type, &options, &v.Weight, &v.Position); err != nil {
+		if err := r.Scan(&v.ID, &v.RoomID, &v.Label, &v.Type, &options, &v.Weight, &v.Position, &v.Important); err != nil {
 			return v, err
 		}
 		v.Options = []string{}
@@ -61,7 +61,7 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 			v.Options = []string{}
 		}
 		return v, nil
-	}, `SELECT p.id, p.room_id, p.label, p.type, p.options, p.weight, p.position
+	}, `SELECT p.id, p.room_id, p.label, p.type, p.options, p.weight, p.position, p.important
 		FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id
 		WHERE r.visit_code = ? AND p.seq > ? ORDER BY r.position, p.position`, code, since); err != nil {
 		return st, err
@@ -69,8 +69,8 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 
 	if st.Questions, err = queryAll(ctx, tx, func(r *sql.Rows) (model.Question, error) {
 		var v model.Question
-		return v, r.Scan(&v.ID, &v.RoomID, &v.Text, &v.Position)
-	}, `SELECT q.id, q.room_id, q.text, q.position
+		return v, r.Scan(&v.ID, &v.RoomID, &v.Text, &v.Position, &v.Important)
+	}, `SELECT q.id, q.room_id, q.text, q.position, q.important
 		FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id
 		WHERE r.visit_code = ? AND q.seq > ? ORDER BY r.position, q.position`, code, since); err != nil {
 		return st, err
