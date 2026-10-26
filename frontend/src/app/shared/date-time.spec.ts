@@ -26,7 +26,8 @@ describe('combineDateTime', () => {
   it('chaque date porte le décalage de sa propre date', () => {
     for (const d of [new Date(2026, 0, 15), new Date(2026, 6, 15)]) {
       const iso = combineDateTime(d, '12:00')!;
-      expect(offsetOf(iso)).toBe(-new Date(2026, d.getMonth(), 15, 12, 0).getTimezoneOffset());
+      // « 0 - x » et non « -x » : en UTC, -0 serait différent de +0 pour toBe.
+      expect(offsetOf(iso)).toBe(0 - new Date(2026, d.getMonth(), 15, 12, 0).getTimezoneOffset());
     }
   });
 });

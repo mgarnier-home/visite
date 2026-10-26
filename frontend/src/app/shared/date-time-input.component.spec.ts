@@ -6,7 +6,7 @@ import { MatDatepickerInputHarness } from '@angular/material/datepicker/testing'
 import { beforeEach, describe, expect, it } from 'vitest';
 import { provideAppIcons } from './icons';
 import { DateTimeInputComponent } from './date-time-input.component';
-import { splitDateTime } from './date-time';
+import { combineDateTime, splitDateTime } from './date-time';
 
 @Component({
   imports: [FormsModule, DateTimeInputComponent],
@@ -72,7 +72,8 @@ describe('DateTimeInputComponent', () => {
   });
 
   it('calendrier : choisir un jour dans la fenêtre émet cette date', async () => {
-    const { fixture, emitted } = await setup('2026-10-25T14:30:00+01:00');
+    // Valeur construite en heure locale : le test ne dépend pas du fuseau de la machine.
+    const { fixture, emitted } = await setup(combineDateTime(new Date(2026, 9, 25), '14:30'));
     const loader = TestbedHarnessEnvironment.loader(fixture);
     const input = await loader.getHarness(MatDatepickerInputHarness);
     await input.openCalendar();
