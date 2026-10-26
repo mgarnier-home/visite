@@ -11,7 +11,7 @@
       <li>
         <a class="room" [routerLink]="['/v', code(), 'room', r.id]" data-test="room">
           <span class="name">{{ r.name }}</span>
-          <span class="progress" data-test="progress">{{ r.filled }} / {{ r.total }}</span>
+          <span class="progress" data-test="progress">{{ r.filled }} / {{ r.total }}@if (r.askedMode) { posées }</span>
           <mat-icon svgIcon="chevron_right" />
         </a>
       </li>

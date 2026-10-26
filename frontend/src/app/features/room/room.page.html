@@ -42,12 +42,10 @@
     <label class="field">
       <span>Surface mesurée (m²)</span>
       <input
-        type="number"
-        inputmode="decimal"
-        min="0"
-        step="any"
+        type="text"
+        appNumeric="decimal"
         data-test="area"
-        [value]="shown(roomKey('area'), area())"
+        [value]="shown(roomKey('area'), formatNumeric(area()))"
         [disabled]="closed()"
         (input)="onInput(roomKey('area'), $event)"
         (blur)="onBlur(roomKey('area'), $event)"

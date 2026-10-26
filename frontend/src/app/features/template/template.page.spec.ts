@@ -2,6 +2,7 @@ import { HarnessLoader } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { MatCheckboxHarness } from '@angular/material/checkbox/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -19,7 +20,7 @@ const makeTemplate = (version = 3): Template => ({
     {
       id: 's1', name: 'Cuisine', kind: 'room', position: 0,
       points: [{ id: 'p1', label: 'Hotte', type: 'note', options: [], weight: 1, position: 0 }],
-      questions: [{ id: 'q1', text: 'Année ?', position: 0 }],
+      questions: [{ id: 'q1', text: 'Année ?', position: 0, important: false }],
     },
     { id: 's2', name: 'Salon', kind: 'room', position: 1, points: [], questions: [] },
     { id: 's3', name: 'Jardin', kind: 'topic', position: 2, points: [], questions: [] },
@@ -195,6 +196,13 @@ describe('TemplatePage', () => {
     expect(body.sections[2].points[0].weight).toBe(2.5);
   });
 
+  it('poids décimal : affiché avec une virgule', async () => {
+    const t = makeTemplate();
+    t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 2.5, position: 0 }] };
+    await setup(t);
+    expect(q<HTMLInputElement>('point-weight').value).toBe('2,5');
+  });
+
   it('quitter le type Bilan remet les poids à 1 : plus de blocage invisible', async () => {
     const t = makeTemplate();
     t.sections[2] = { ...t.sections[2], kind: 'summary', points: [{ id: 'p9', label: 'Prix', type: 'note', options: [], weight: 1, position: 0 }] };
@@ -208,6 +216,39 @@ describe('TemplatePage', () => {
     api.putTemplate.mockResolvedValue(makeTemplate(4));
     await click(q('save'));
     expect((api.putTemplate.mock.calls[0][0] as Template).sections[2].points[0].weight).toBe(1);
+  });
+
+  it('cocher « Importante » sur une question de pièce envoie important: true', async () => {
+    await setup();
+    const boxes = await loader.getAllHarnesses(MatCheckboxHarness.with({ selector: '[data-test=question-important]' }));
+    expect(boxes.length).toBe(1);
+    expect(await boxes[0].getLabelText()).toBe('Importante');
+    await boxes[0].check();
+    await settle();
+    api.putTemplate.mockResolvedValue(makeTemplate(4));
+    await click(q('save'));
+    expect((api.putTemplate.mock.calls[0][0] as Template).sections[0].questions[0].important).toBe(true);
+  });
+
+  it('pas de case « Importante » hors section de type pièce', async () => {
+    const t = makeTemplate();
+    t.sections = [{ id: 's3', name: 'Questions générales', kind: 'topic', position: 0, points: [], questions: [{ id: 'q9', text: 'Voisins ?', position: 0, important: false }] }];
+    await setup(t);
+    expect(all('question').length).toBe(1);
+    expect(all('question-important').length).toBe(0);
+  });
+
+  it('passer une section pièce en thème remet important à false', async () => {
+    const t = makeTemplate();
+    t.sections[0].questions[0].important = true;
+    await setup(t);
+    const selects = await loader.getAllHarnesses(MatSelectHarness.with({ selector: '[data-test=section-kind]' }));
+    await selects[0].clickOptions({ text: 'Thème' });
+    await settle();
+    expect(all('question-important').length).toBe(0);
+    api.putTemplate.mockResolvedValue(makeTemplate(4));
+    await click(q('save'));
+    expect((api.putTemplate.mock.calls[0][0] as Template).sections[0].questions[0].important).toBe(false);
   });
 
   it('les champs sont désactivés pendant l\'enregistrement', async () => {

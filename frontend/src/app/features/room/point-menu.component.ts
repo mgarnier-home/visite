@@ -3,11 +3,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
 
 /** Menu ⋯ d'un point : point bloquant et coût des travaux. */
 @Component({
   selector: 'app-point-menu',
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule],
+  imports: [NumericDirective, MatButtonModule, MatIconModule, MatMenuModule, MatSlideToggleModule],
   template: `
     <button mat-icon-button type="button" class="menu-btn" data-test="menu-btn" aria-label="Options du point"
       [disabled]="disabled()" [matMenuTriggerFor]="menu">
@@ -20,7 +21,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
           (change)="blockingChange.emit($event.checked)">Point bloquant</mat-slide-toggle>
         <label class="works">
           <span>Travaux (€)</span>
-          <input type="number" inputmode="numeric" min="0" step="1" data-test="works-input"
+          <input type="text" appNumeric="integer" data-test="works-input"
             [value]="works() ?? ''" [disabled]="disabled()" (change)="onWorks($event)" />
         </label>
       </div>
@@ -50,14 +51,8 @@ export class PointMenuComponent {
 
   protected onWorks(event: Event): void {
     const input = event.target as HTMLInputElement;
-    if (input.validity.badInput) return; // saisie partielle invalide : on ne l'interprète pas
-    const raw = input.value.trim();
-    if (raw === '') {
-      this.worksChange.emit(null);
-      return;
-    }
-    const n = Number(raw);
-    if (Number.isInteger(n) && n >= 0) {
+    const n = parseNumeric(input.value);
+    if (n !== null || input.value.trim() === '') {
       this.worksChange.emit(n);
     } else {
       input.value = String(this.works() ?? ''); // saisie refusée : on restaure la valeur

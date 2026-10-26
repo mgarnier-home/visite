@@ -2,12 +2,28 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
-import { VisitState } from '../../core/api.types';
+import { Template, VisitState } from '../../core/api.types';
 import { LocalStore } from '../../core/local-store';
+import { provideAppIcons } from '../../shared/icons';
 import { CreatePage } from './create.page';
 
+const section = (id: string, name: string, kind: Template['sections'][number]['kind'], position: number) => ({
+  id, name, kind, position, points: [], questions: [],
+});
+const TEMPLATE: Template = {
+  version: 1,
+  packing_list: '',
+  sections: [
+    section('s-gen', 'Questions générales', 'topic', 0),
+    section('s-salon', 'Salon', 'room', 1),
+    section('s-garage', 'Garage', 'room', 2),
+    section('s-ch', 'Chambre', 'per_bedroom', 3),
+    section('s-bilan', 'Bilan', 'summary', 4),
+  ],
+};
+
 describe('CreatePage', () => {
-  const api = { exists: vi.fn(), create: vi.fn(), state: vi.fn(), join: vi.fn() };
+  const api = { exists: vi.fn(), create: vi.fn(), state: vi.fn(), join: vi.fn(), getTemplate: vi.fn() };
   const store = { saveState: vi.fn() };
   const navigate = vi.fn();
 
@@ -15,12 +31,14 @@ describe('CreatePage', () => {
     vi.useFakeTimers();
     vi.resetAllMocks();
     api.exists.mockResolvedValue({ exists: false });
+    api.getTemplate.mockResolvedValue(TEMPLATE);
     TestBed.configureTestingModule({
       imports: [CreatePage],
       providers: [
         { provide: ApiClient, useValue: api },
         { provide: LocalStore, useValue: store },
         provideRouter([]),
+        provideAppIcons(),
       ],
     });
   });
@@ -186,41 +204,160 @@ describe('CreatePage', () => {
     expect(navigate).toHaveBeenCalledWith(['/v', 'maison-x']);
   });
 
-  it('refuse un nombre négatif', async () => {
+  it('convertit les surfaces saisies avec une virgule', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
     const { fixture, el, submit } = setup();
     type(el, '[data-test=address]', 'x');
     type(el, '[data-test=code]', 'maison-x');
-    type(el, '[data-test=price]', '-5');
-    (el.querySelector('[data-test=price]') as HTMLInputElement).dispatchEvent(new Event('blur'));
+    type(el, '[data-test=living-area]', '85,5');
+    type(el, '[data-test=rooms_count]', '4');
     await settle(fixture, 300);
-    expect(submit().disabled).toBe(true);
-    expect(el.textContent).toContain('Doit être positif ou nul');
+    submit().click();
+    await settle(fixture);
+    const fiche = api.create.mock.calls[0][0].fiche;
+    expect(fiche.living_area_m2).toBe(85.5);
+    expect(fiche.rooms_count).toBe(4);
+    expect(fiche.floor_area_m2).toBeNull();
   });
 
-  it('refuse un nombre décimal pour les pièces, les chambres et l\'année', async () => {
-    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
-      TestBed.resetTestingModule();
-      TestBed.configureTestingModule({
-        imports: [CreatePage],
-        providers: [
-          { provide: ApiClient, useValue: api },
-          { provide: LocalStore, useValue: store },
-          provideRouter([]),
-        ],
-      });
-      const { fixture, el, submit } = setup();
-      type(el, '[data-test=address]', 'x');
-      type(el, '[data-test=code]', 'maison-x');
-      const input = el.querySelector(`[data-test=${name}]`) as HTMLInputElement;
-      expect(input.getAttribute('step')).toBe('1');
-      type(el, `[data-test=${name}]`, '2.5');
+  it('date et heure de la visite : visit_at envoyé en RFC 3339 local', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    for (const [sel, v] of [['[data-test=visit-at] [data-test=date]', '25/10/2026'], ['[data-test=visit-at] [data-test=time]', '1430']]) {
+      const input = el.querySelector(sel) as HTMLInputElement;
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
       input.dispatchEvent(new Event('blur'));
-      await settle(fixture, 300);
-      expect(submit().disabled).toBe(true);
-      expect(el.textContent).toContain('Nombre entier attendu');
-      type(el, `[data-test=${name}]`, '3');
-      await settle(fixture);
-      expect(submit().disabled).toBe(false);
     }
+    await settle(fixture, 300);
+    submit().click();
+    await settle(fixture);
+    expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
+  });
+
+  it('Entrée dans le champ heure : la visite part avec l\'heure tapée, sans attendre la sortie du champ', async () => {
+    api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+    const { fixture, el } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    const date = el.querySelector('[data-test=visit-at] [data-test=date]') as HTMLInputElement;
+    date.value = '25/10/2026';
+    for (const e of ['input', 'change', 'blur']) date.dispatchEvent(new Event(e));
+    await settle(fixture, 300);
+    const time = el.querySelector('[data-test=visit-at] [data-test=time]') as HTMLInputElement;
+    time.value = '1430';
+    time.dispatchEvent(new Event('input'));
+    // Entrée : le navigateur envoie keydown, puis soumet le formulaire (aucun blur)
+    time.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    el.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle(fixture);
+    expect(api.create.mock.calls[0][0].fiche.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
+  });
+
+  it('heure invalide après une date valide : création désactivée', async () => {
+    const { fixture, el, submit } = setup();
+    type(el, '[data-test=code]', 'Maison X');
+    type(el, '[data-test=address]', '12 rue des Lilas');
+    const fill = (sel: string, v: string) => {
+      const input = el.querySelector(sel) as HTMLInputElement;
+      input.value = v;
+      for (const e of ['input', 'change', 'blur']) input.dispatchEvent(new Event(e));
+    };
+    fill('[data-test=visit-at] [data-test=date]', '25/10/2026');
+    fill('[data-test=visit-at] [data-test=time]', '1430');
+    await settle(fixture, 300);
+    expect(submit().disabled).toBe(false);
+    fill('[data-test=visit-at] [data-test=time]', '2575');
+    await settle(fixture);
+    expect(submit().disabled).toBe(true);
+  });
+
+  it('champs numériques en texte filtré', () => {
+    const { el } = setup();
+    for (const name of ['price', 'rooms_count', 'bedrooms_count', 'construction_year']) {
+      const input = el.querySelector(`[data-test=${name}]`) as HTMLInputElement;
+      expect(input.type).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('numeric');
+    }
+    const area = el.querySelector('[data-test=living-area]') as HTMLInputElement;
+    expect(area.type).toBe('text');
+    expect(area.getAttribute('inputmode')).toBe('decimal');
+  });
+
+  describe('pièces de la maison', () => {
+    async function ready() {
+      const ctx = setup();
+      type(ctx.el, '[data-test=address]', '12 rue des Lilas');
+      type(ctx.el, '[data-test=code]', 'maison-x');
+      await settle(ctx.fixture, 300);
+      return ctx;
+    }
+    const boxes = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>('[data-test=room-option]'));
+    const input = (box: HTMLElement) => box.querySelector('input') as HTMLInputElement;
+
+    it('liste uniquement les sections room, dans l\'ordre du modèle, toutes cochées', async () => {
+      const { el } = await ready();
+      const items = boxes(el);
+      expect(items.map((b) => b.textContent?.trim())).toEqual(['Salon', 'Garage']);
+      expect(items.every((b) => input(b).checked)).toBe(true);
+    });
+
+    it('affiche une ligne de chargement tant que le modèle n\'est pas arrivé', () => {
+      api.getTemplate.mockReturnValue(new Promise(() => {}));
+      const { el } = setup();
+      expect(el.textContent).toContain('Chargement des pièces…');
+    });
+
+    it('décocher Garage envoie son identifiant dans excluded_section_ids', async () => {
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, el, submit } = await ready();
+      input(boxes(el)[1]).click();
+      await settle(fixture);
+      submit().click();
+      await settle(fixture);
+      expect(api.create.mock.calls[0][0].excluded_section_ids).toEqual(['s-garage']);
+    });
+
+    it('tout coché envoie une liste vide', async () => {
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, submit } = await ready();
+      submit().click();
+      await settle(fixture);
+      expect(api.create.mock.calls[0][0].excluded_section_ids).toEqual([]);
+    });
+
+    it('envoi avant la fin du chargement : excluded_section_ids omis', async () => {
+      api.getTemplate.mockReturnValue(new Promise(() => {}));
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, submit } = await ready();
+      expect(submit().disabled).toBe(false);
+      submit().click();
+      await settle(fixture);
+      expect('excluded_section_ids' in api.create.mock.calls[0][0]).toBe(false);
+    });
+
+    it('échec du chargement : message affiché, création possible sans le champ', async () => {
+      api.getTemplate.mockRejectedValue(new ApiError(0, 'réseau'));
+      api.create.mockResolvedValue({ seq: 1 } as unknown as VisitState);
+      const { fixture, el, submit } = await ready();
+      expect(el.textContent).toContain('Impossible de charger les pièces : toutes seront créées');
+      expect(boxes(el)).toHaveLength(0);
+      submit().click();
+      await settle(fixture);
+      expect('excluded_section_ids' in api.create.mock.calls[0][0]).toBe(false);
+    });
+
+    it('400 « sections exclues invalides » : message du serveur et rechargement du modèle', async () => {
+      api.create.mockRejectedValue(new ApiError(400, 'sections exclues invalides'));
+      const { fixture, el, submit } = await ready();
+      expect(api.getTemplate).toHaveBeenCalledTimes(1);
+      submit().click();
+      await settle(fixture);
+      expect(el.textContent).toContain('La liste des pièces a changé : vérifiez-la puis recommencez');
+      expect(api.getTemplate).toHaveBeenCalledTimes(2);
+    });
   });
 });

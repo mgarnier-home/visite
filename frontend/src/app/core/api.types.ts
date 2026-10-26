@@ -11,7 +11,7 @@ export interface TemplateSection {
 export interface TemplatePoint {
   id: string; label: string; type: PointType; options: string[]; weight: number; position: number;
 }
-export interface TemplateQuestion { id: string; text: string; position: number }
+export interface TemplateQuestion { id: string; text: string; position: number; important: boolean }
 
 export interface Fiche {
   address: string; price_eur: number | null; living_area_m2: number | null;
@@ -60,7 +60,11 @@ export interface OpsResponse { seq: number; results: OpResult[] }
 /** Corps de POST /api/visits/{code}/ops. */
 export interface OpsRequest { ops: Op[] }
 
-export interface CreateVisitRequest { code: string; fiche: Fiche }
+export interface CreateVisitRequest {
+  code: string; fiche: Fiche;
+  /** Identifiants des sections `room` décochées ; omis si le modèle n'a pas pu être chargé. */
+  excluded_section_ids?: string[];
+}
 export interface JoinResponse { number: number }
 export interface ExistsResponse { exists: boolean }
 export interface ErrorResponse { error: string }

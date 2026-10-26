@@ -102,8 +102,9 @@ func (h *handlers) createVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Code  string      `json:"code"`
-		Fiche model.Fiche `json:"fiche"`
+		Code               string      `json:"code"`
+		Fiche              model.Fiche `json:"fiche"`
+		ExcludedSectionIDs []string    `json:"excluded_section_ids"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -112,8 +113,11 @@ func (h *handlers) createVisit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "code de visite invalide")
 		return
 	}
-	err := h.store.CreateVisit(r.Context(), req.Code, req.Fiche, device, h.now())
+	err := h.store.CreateVisitExcluding(r.Context(), req.Code, req.Fiche, device, h.now(), req.ExcludedSectionIDs)
 	switch {
+	case errors.Is(err, store.ErrInvalidExcluded):
+		writeError(w, http.StatusBadRequest, "sections exclues invalides")
+		return
 	case errors.Is(err, model.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "fiche invalide")
 		return

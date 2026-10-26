@@ -2,6 +2,7 @@ import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, moveItemInArray } fro
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -12,17 +13,18 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { PointType, SectionKind, Template, TemplateSection } from '../../core/api.types';
+import { NumericDirective, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
 import { ConfirmDialog } from '../room/confirm.dialog';
 
 const clone = <T>(value: T): T => structuredClone(value);
-const isPositiveNumber = (raw: string): boolean => raw.trim() !== '' && Number.isFinite(Number(raw)) && Number(raw) > 0;
+const isPositiveNumber = (raw: string): boolean => (parseNumeric(raw) ?? 0) > 0;
 
 /** Éditeur du modèle de visite (écran 5) : sections, points, questions et liste « À emporter ». */
 @Component({
   selector: 'app-template-page',
   imports: [
-    CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatChipsModule,
-    MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule,
+    CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatCheckboxModule, MatChipsModule,
+    MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, NumericDirective,
   ],
   templateUrl: './template.page.html',
   styleUrl: './template.page.scss',
@@ -51,6 +53,7 @@ export class TemplatePage implements OnInit {
   private readonly loaded = signal<Template | null>(null);
   protected readonly draft = signal<Template | null>(null);
   /** Saisie brute du poids par point : le poids stocké n'est mis à jour que pour un nombre > 0. */
+  protected readonly formatNumeric = formatNumeric;
   protected readonly weightDrafts = signal<Record<string, string>>({});
 
   protected readonly dirty = computed(() => {
@@ -146,6 +149,8 @@ export class TemplatePage implements OnInit {
       section.kind = kind;
       // le poids n'est éditable que dans un bilan, mais le serveur exige un poids > 0 partout
       if (kind !== 'summary') section.points.forEach((p) => (p.weight = 1));
+      // « Importante » n'existe que dans une pièce
+      if (kind !== 'room') section.questions.forEach((q) => (q.important = false));
     });
     if (kind !== 'summary') {
       const ids = new Set(this.draft()!.sections[si].points.map((p) => p.id));
@@ -201,7 +206,7 @@ export class TemplatePage implements OnInit {
   protected setPointWeight(si: number, pi: number, raw: string): void {
     const id = this.draft()!.sections[si].points[pi].id;
     this.weightDrafts.update((d) => ({ ...d, [id]: raw }));
-    if (isPositiveNumber(raw)) this.edit((t) => (t.sections[si].points[pi].weight = Number(raw)));
+    if (isPositiveNumber(raw)) this.edit((t) => (t.sections[si].points[pi].weight = parseNumeric(raw)!));
   }
 
   protected weightError(id: string): boolean {
@@ -239,12 +244,16 @@ export class TemplatePage implements OnInit {
   protected addQuestion(si: number): void {
     this.edit((t) => {
       const questions = t.sections[si].questions;
-      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length });
+      questions.push({ id: crypto.randomUUID(), text: '', position: questions.length, important: false });
     });
   }
 
   protected setQuestionText(si: number, qi: number, text: string): void {
     this.edit((t) => (t.sections[si].questions[qi].text = text));
+  }
+
+  protected setQuestionImportant(si: number, qi: number, important: boolean): void {
+    this.edit((t) => (t.sections[si].questions[qi].important = important));
   }
 
   protected removeQuestion(si: number, qi: number): void {

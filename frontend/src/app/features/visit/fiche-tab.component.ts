@@ -1,9 +1,12 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Fiche } from '../../core/api.types';
 import { buildingAge, notaryFees, pricePerM2, realPrice } from '../../core/compute';
 import { formatEur } from '../../core/format';
-import { localIsoWithOffset, SyncService } from '../../core/sync.service';
+import { SyncService } from '../../core/sync.service';
+import { DateTimeInputComponent } from '../../shared/date-time-input.component';
+import { NumericDirective, NumericMode, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
 
 type FicheKind = 'text' | 'eur' | 'number' | 'integer' | 'dpe' | 'datetime' | 'tel' | 'email' | 'url';
 interface FicheField {
@@ -15,18 +18,10 @@ interface FicheField {
 /** Classes énergétiques du DPE (même liste que la création, sans importer la page). */
 const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** Valeur d'un `<input type="datetime-local">` (heure locale) pour un instant RFC 3339. */
-function toLocalInput(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 /** Fiche du bien : lecture seule, ou formulaire pour le créateur de la visite. */
 @Component({
   selector: 'app-fiche-tab',
+  imports: [FormsModule, DateTimeInputComponent, NumericDirective],
   templateUrl: './fiche-tab.component.html',
   styleUrl: './fiche-tab.component.scss',
 })
@@ -60,8 +55,6 @@ export class FicheTabComponent {
   protected readonly fiche = computed(() => this.state()?.visit.fiche ?? null);
   protected readonly editable = computed(() => !!this.state()?.visit.is_creator);
   protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
-  /** Message d'erreur par champ, pour la dernière saisie refusée. */
-  protected readonly errors = signal<Partial<Record<keyof Fiche, string>>>({});
 
   protected readonly computedRows = computed(() => {
     const s = this.state();
@@ -93,7 +86,7 @@ export class FicheTabComponent {
         ? '—'
         : d.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
     }
-    return String(v);
+    return typeof v === 'number' ? formatNumeric(v) : String(v);
   }
 
   protected link(field: FicheField): string | null {
@@ -109,18 +102,11 @@ export class FicheTabComponent {
   /** Valeur initiale d'un champ de saisie. */
   protected inputValue(field: FicheField): string {
     const v = this.fiche()?.[field.name] ?? null;
-    if (field.kind === 'datetime') return toLocalInput(v as string | null);
-    return v === null ? '' : String(v);
+    return typeof v === 'number' ? formatNumeric(v) : String(v ?? '');
   }
 
   protected inputType(kind: FicheKind): string {
     switch (kind) {
-      case 'eur':
-      case 'number':
-      case 'integer':
-        return 'number';
-      case 'datetime':
-        return 'datetime-local';
       case 'text':
         return 'text';
       default:
@@ -128,18 +114,37 @@ export class FicheTabComponent {
     }
   }
 
+  /** Mode du filtre numérique d'un champ, `null` si le champ n'est pas numérique. */
+  protected numericMode(kind: FicheKind): NumericMode | null {
+    switch (kind) {
+      case 'eur':
+      case 'integer':
+        return 'integer';
+      case 'number':
+        return 'decimal';
+      default:
+        return null;
+    }
+  }
+
   /** Champ modifié : envoie `set_fiche` si la valeur valide diffère de l'état, sinon restaure l'affichage. */
   protected async onChange(field: FicheField, event: Event): Promise<void> {
     const el = event.target as HTMLInputElement | HTMLSelectElement;
-    const current = this.fiche()?.[field.name] ?? null;
     const next = this.parse(field, el);
-    const raw = el.value.trim();
-    const decimal = field.kind === 'integer' && raw !== '' && !Number.isInteger(Number(raw));
-    this.setError(field, decimal ? 'Nombre entier attendu' : null);
-    if (next === undefined || next === current || this.sameInstant(field, next, current)) {
-      if (next === undefined) el.value = this.inputValue(field);
-      return;
-    }
+    if (next === undefined) el.value = this.inputValue(field);
+    else await this.save(field, next);
+  }
+
+  /** Date et heure de la visite modifiées (le composant n'émet que des valeurs valides). */
+  protected async onDateTime(field: FicheField, next: string | null): Promise<void> {
+    const current = this.fiche()?.[field.name] ?? null;
+    if (next === current || this.sameInstant(next, current)) return;
+    await this.save(field, next);
+  }
+
+  private async save(field: FicheField, next: string | number | null): Promise<void> {
+    const current = this.fiche()?.[field.name] ?? null;
+    if (next === current) return;
     try {
       await this.sync.dispatch('set_fiche', { fields: { [field.name]: next } });
     } catch {
@@ -149,24 +154,13 @@ export class FicheTabComponent {
 
   /** Valeur à envoyer ; `undefined` si la saisie est invalide (ignorée). */
   private parse(field: FicheField, el: HTMLInputElement | HTMLSelectElement): string | number | null | undefined {
-    if (el instanceof HTMLInputElement && el.validity.badInput) return undefined;
     const raw = el.value.trim();
     switch (field.kind) {
       case 'eur':
-      case 'number': {
-        if (raw === '') return null;
-        const n = Number(raw);
-        return Number.isFinite(n) && n >= 0 ? n : undefined;
-      }
+      case 'number':
       case 'integer': {
         if (raw === '') return null;
-        const n = Number(raw);
-        return Number.isInteger(n) && n >= 0 ? n : undefined;
-      }
-      case 'datetime': {
-        if (raw === '') return null;
-        const d = new Date(raw);
-        return Number.isNaN(d.getTime()) ? undefined : localIsoWithOffset(d);
+        return parseNumeric(raw) ?? undefined; // « , » seul : saisie ignorée
       }
       case 'text':
         if (field.name === 'address' && raw === '') return undefined; // l'adresse est obligatoire
@@ -176,19 +170,9 @@ export class FicheTabComponent {
     }
   }
 
-  private setError(field: FicheField, message: string | null): void {
-    this.errors.update((all) => {
-      const { [field.name]: _, ...rest } = all;
-      return message ? { ...rest, [field.name]: message } : rest;
-    });
-  }
-
-  private sameInstant(field: FicheField, next: unknown, current: unknown): boolean {
-    return (
-      field.kind === 'datetime' &&
-      typeof next === 'string' &&
-      typeof current === 'string' &&
-      new Date(next).getTime() === new Date(current).getTime()
-    );
+  private sameInstant(next: string | null, current: unknown): boolean {
+    // à la minute : le champ n'a pas de secondes
+    const minute = (iso: string) => Math.floor(new Date(iso).getTime() / 60_000);
+    return typeof next === 'string' && typeof current === 'string' && minute(next) === minute(current);
   }
 }

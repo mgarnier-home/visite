@@ -390,3 +390,185 @@ func TestJoinConcurrentDistinctNumbers(t *testing.T) {
 		}
 	}
 }
+
+// sectionIDByName renvoie l'identifiant de la section du modèle portant ce nom.
+func sectionIDByName(t *testing.T, tpl model.Template, name string) string {
+	t.Helper()
+	for _, sec := range tpl.Sections {
+		if sec.Name == name {
+			return sec.ID
+		}
+	}
+	t.Fatalf("section %q absente du modèle", name)
+	return ""
+}
+
+func roomNames(rooms []roomRow) []string {
+	out := []string{}
+	for _, r := range rooms {
+		out = append(out, r.name)
+	}
+	return out
+}
+
+func listQuestionTexts(t *testing.T, s *Store, roomID string) []string {
+	t.Helper()
+	rows, err := s.db.Query(`SELECT text FROM visit_questions WHERE room_id = ? ORDER BY position`, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var q string
+		if err := rows.Scan(&q); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, q)
+	}
+	return out
+}
+
+func TestCreateVisitExcludesSection(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	garage := sectionIDByName(t, tpl, "Garage")
+	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{garage}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range listRooms(t, s, "maison-x") {
+		if r.name == "Garage" {
+			t.Fatalf("la pièce Garage ne devait pas être créée")
+		}
+	}
+}
+
+func TestCreateVisitOtherQuestions(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	excl := []string{sectionIDByName(t, tpl, "Garage"), sectionIDByName(t, tpl, "Cuisine")}
+	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, excl); err != nil {
+		t.Fatal(err)
+	}
+	rooms := listRooms(t, s, "maison-x")
+	if len(rooms) < 2 || rooms[1].name != "Autres questions" {
+		t.Fatalf("pièces = %v, veut Autres questions en position 1", roomNames(rooms))
+	}
+	o := rooms[1]
+	if o.kind != "topic" || o.dirName != "autres-questions" || o.position != 1 {
+		t.Fatalf("pièce = %+v", o)
+	}
+	if pts := listPoints(t, s, o.id); len(pts) != 0 {
+		t.Fatalf("points = %v, veut aucun", pts)
+	}
+	for i, r := range rooms {
+		if r.position != i {
+			t.Errorf("position de %q = %d, veut %d", r.name, r.position, i)
+		}
+	}
+	got := listQuestionTexts(t, s, o.id)
+	want := []string{}
+	for _, name := range []string{"Cuisine", "Garage"} {
+		for _, sec := range tpl.Sections {
+			if sec.Name != name {
+				continue
+			}
+			for _, q := range sec.Questions {
+				if q.Important {
+					want = append(want, name+" : "+q.Text)
+				}
+			}
+		}
+	}
+	if len(want) != 6 || fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("questions = %q, veut %q", got, want)
+	}
+	if got[0][:len("Cuisine : La cuisine est-elle vendue équipée ?")] != "Cuisine : La cuisine est-elle vendue équipée ?" {
+		t.Errorf("première question = %q", got[0])
+	}
+}
+
+func TestCreateVisitNoOtherQuestionsWhenNothingImportant(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	for i := range tpl.Sections {
+		if tpl.Sections[i].Name == "Garage" {
+			for j := range tpl.Sections[i].Questions {
+				tpl.Sections[i].Questions[j].Important = false
+			}
+		}
+	}
+	if _, err := s.SaveTemplate(ctx, tpl); err != nil {
+		t.Fatal(err)
+	}
+	tpl, _ = s.GetTemplate(ctx)
+	garage := sectionIDByName(t, tpl, "Garage")
+	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{garage}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range listRooms(t, s, "maison-x") {
+		if r.name == "Autres questions" || r.name == "Garage" {
+			t.Fatalf("pièce %q inattendue", r.name)
+		}
+	}
+}
+
+func TestCreateVisitAllRoomsExcluded(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	excl := []string{}
+	for _, sec := range tpl.Sections {
+		if sec.Kind == model.KindRoom {
+			excl = append(excl, sec.ID)
+		}
+	}
+	two := 2
+	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(&two), "dev-1", testNow, excl); err != nil {
+		t.Fatal(err)
+	}
+	rooms := listRooms(t, s, "maison-x")
+	want := []string{"Questions générales", "Autres questions", "Chambre 1", "Chambre 2", "Bilan"}
+	if fmt.Sprint(roomNames(rooms)) != fmt.Sprint(want) {
+		t.Fatalf("pièces = %q, veut %q", roomNames(rooms), want)
+	}
+	for i, r := range rooms {
+		if r.position != i {
+			t.Errorf("position de %q = %d, veut %d", r.name, r.position, i)
+		}
+	}
+}
+
+func TestCreateVisitDuplicateExcluded(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	g := sectionIDByName(t, tpl, "Garage")
+	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{g, g}); err != nil {
+		t.Fatalf("doublon refusé : %v", err)
+	}
+}
+
+func TestCreateVisitBadExcluded(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	tpl, _ := s.GetTemplate(ctx)
+	cases := map[string][]string{
+		"inconnu":             {"nope"},
+		"questions générales": {sectionIDByName(t, tpl, "Questions générales")},
+		"chambre":             {sectionIDByName(t, tpl, "Chambre")},
+		"bilan":               {sectionIDByName(t, tpl, "Bilan")},
+	}
+	for name, ids := range cases {
+		err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, ids)
+		if !errors.Is(err, model.ErrInvalid) || !errors.Is(err, ErrInvalidExcluded) {
+			t.Errorf("%s : err = %v, veut ErrInvalid et ErrInvalidExcluded", name, err)
+		}
+	}
+	if ok, _ := s.VisitExists(ctx, "maison-x"); ok {
+		t.Fatal("aucune visite ne doit être créée")
+	}
+}

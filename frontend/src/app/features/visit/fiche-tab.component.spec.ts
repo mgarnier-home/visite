@@ -116,31 +116,50 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
-  it('nombres : vide → null, valeur négative ignorée', () => {
+  it('nombres : vide → null, virgule décimale lue comme un point', () => {
     const { el } = setup();
     change(field<HTMLInputElement>(el, 'price_eur'), '');
     expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { price_eur: null } });
     sync.dispatch.mockClear();
-    change(field<HTMLInputElement>(el, 'living_area_m2'), '-5');
+    change(field<HTMLInputElement>(el, 'living_area_m2'), '85,5');
+    expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { living_area_m2: 85.5 } });
+    sync.dispatch.mockClear();
+    change(field<HTMLInputElement>(el, 'living_area_m2'), ',');
     expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
-  it('nombres entiers (pièces, chambres, année) : pas de 1, décimale refusée avec un message', () => {
-    const { fixture, el } = setup();
-    for (const name of ['rooms_count', 'bedrooms_count', 'construction_year']) {
+  it('surface décimale : affichée avec une virgule, en saisie comme en lecture', () => {
+    const { el } = setup(makeState({}, { living_area_m2: 85.5 }));
+    expect(field<HTMLInputElement>(el, 'living_area_m2').value).toBe('85,5');
+    const { el: el2 } = setup(makeState({ creator: false }, { living_area_m2: 85.5 }));
+    expect(text(el2, '[data-field=living_area_m2]')).toContain('85,5');
+  });
+
+  it('nombre collé dans un champ vide : envoyé à la sortie du champ', () => {
+    const { el } = setup(makeState({}, { living_area_m2: null }));
+    const input = field<HTMLInputElement>(el, 'living_area_m2');
+    const paste = new Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => '85,5 m²' } });
+    input.dispatchEvent(paste);
+    expect(sync.dispatch).not.toHaveBeenCalled();
+    input.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { living_area_m2: 85.5 } });
+  });
+
+  it('champs numériques : texte filtré (entier pour prix, pièces, chambres, année ; décimal pour les surfaces)', () => {
+    const { el } = setup();
+    for (const name of ['price_eur', 'rooms_count', 'bedrooms_count', 'construction_year']) {
       const input = field<HTMLInputElement>(el, name);
-      expect(input.getAttribute('step')).toBe('1');
+      expect(input.type).toBe('text');
       expect(input.getAttribute('inputmode')).toBe('numeric');
     }
-    expect(field<HTMLInputElement>(el, 'living_area_m2').getAttribute('step')).toBe('any');
-    change(field<HTMLInputElement>(el, 'rooms_count'), '2.5');
-    fixture.detectChanges();
-    expect(sync.dispatch).not.toHaveBeenCalled();
-    expect(text(el, '[data-test=error-rooms_count]')).toBe('Nombre entier attendu');
+    for (const name of ['living_area_m2', 'floor_area_m2', 'land_area_m2']) {
+      const input = field<HTMLInputElement>(el, name);
+      expect(input.type).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('decimal');
+    }
     change(field<HTMLInputElement>(el, 'rooms_count'), '4');
-    fixture.detectChanges();
     expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { rooms_count: 4 } });
-    expect(el.querySelector('[data-test=error-rooms_count]')).toBeNull();
   });
 
   it('DPE : sélection d\'une classe et retour à « — »', () => {
@@ -151,16 +170,43 @@ describe('FicheTabComponent', () => {
     expect(sync.dispatch).toHaveBeenCalledWith('set_fiche', { fields: { dpe_energy: null } });
   });
 
-  it('visit_at : datetime-local converti en RFC 3339 avec décalage', () => {
-    const { el } = setup();
-    change(field<HTMLInputElement>(el, 'visit_at'), '2026-10-25T14:30');
-    const call = sync.dispatch.mock.calls[0];
-    expect(call[0]).toBe('set_fiche');
-    expect(call[1].fields.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
+  it('visit_at : date et heure tapées, envoyées en RFC 3339 avec décalage', async () => {
+    const { fixture, el } = setup();
+    await fixture.whenStable();
+    const type = (sel: string, v: string) => {
+      const input = el.querySelector<HTMLInputElement>(`[data-field=visit_at] ${sel}`)!;
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new Event('blur'));
+    };
+    type('[data-test=date]', '25/10/2026');
+    type('[data-test=time]', '1430');
+    const calls = sync.dispatch.mock.calls.filter((c) => 'visit_at' in c[1].fields);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1][0]).toBe('set_fiche');
+    expect(calls[calls.length - 1][1].fields.visit_at).toMatch(/^2026-10-25T14:30:00[+-]\d{2}:\d{2}$/);
   });
 
-  it('visite clôturée : champs désactivés', () => {
-    const { el } = setup(makeState({ closed: true }));
+  it('visit_at inchangée : aucun envoi', async () => {
+    const { fixture, el } = setup(makeState({}, { visit_at: '2026-10-25T14:30:00+01:00' }));
+    await fixture.whenStable();
+    const time = el.querySelector<HTMLInputElement>('[data-field=visit_at] [data-test=time]')!;
+    time.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('visit_at stockée avec des secondes : sortie du champ heure sans envoi', async () => {
+    const { fixture, el } = setup(makeState({}, { visit_at: '2026-10-25T14:30:45+01:00' }));
+    await fixture.whenStable();
+    el.querySelector<HTMLInputElement>('[data-field=visit_at] [data-test=time]')!.dispatchEvent(new Event('blur'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('visite clôturée : champs désactivés', async () => {
+    const { fixture, el } = setup(makeState({ closed: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
     const inputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
     expect(inputs.length).toBeGreaterThan(0);
     expect(inputs.every((i) => i.disabled)).toBe(true);

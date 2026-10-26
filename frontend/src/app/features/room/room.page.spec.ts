@@ -142,11 +142,32 @@ describe('RoomPage', () => {
     comment.dispatchEvent(new Event('blur'));
     const area = q<HTMLInputElement>(el, '[data-test=area]');
     area.dispatchEvent(new Event('blur'));
-    area.value = '22.5';
+    area.value = '22,5';
     area.dispatchEvent(new Event('blur'));
     expect(sync.dispatch).toHaveBeenCalledTimes(2);
     expect(sync.dispatch).toHaveBeenCalledWith('set_comment', { room_id: 'r1', text: 'Sombre' });
     expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'r1', field: 'area_m2', value: 22.5 });
+  });
+
+  it('surface décimale : affichée avec une virgule, rétablie avec une virgule', async () => {
+    const withArea = makeState();
+    withArea.shared.find((v) => v.target_id === 'r1' && v.field === 'area_m2')!.value = 22.5;
+    state.set(withArea);
+    const { el } = await setup();
+    const area = q<HTMLInputElement>(el, '[data-test=area]');
+    expect(area.value).toBe('22,5');
+    area.value = ',';
+    area.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(area.value).toBe('22,5'));
+  });
+
+  it('surface : une virgule seule n\'envoie rien et rétablit la valeur affichée', async () => {
+    const { el } = await setup();
+    const area = q<HTMLInputElement>(el, '[data-test=area]');
+    area.value = ',';
+    area.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(area.value).toBe('20'));
+    expect(sync.dispatch).not.toHaveBeenCalled();
   });
 
   it('« Posée » dispatche set_shared asked', async () => {
@@ -358,15 +379,5 @@ describe('RoomPage', () => {
     q<HTMLButtonElement>(document.body, '[data-test=confirm]').click();
     await vi.waitFor(() => expect(snack.open).toHaveBeenCalled());
     expect(nav).not.toHaveBeenCalled();
-  });
-
-  it('surface : une saisie partielle invalide (badInput) n\'envoie rien', async () => {
-    const { el } = await setup();
-    const area = q<HTMLInputElement>(el, '[data-test=area]');
-    Object.defineProperty(area, 'validity', { value: { badInput: true } });
-    area.value = '';
-    area.dispatchEvent(new Event('input'));
-    area.dispatchEvent(new Event('blur'));
-    expect(sync.dispatch).not.toHaveBeenCalled();
   });
 });

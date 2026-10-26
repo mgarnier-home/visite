@@ -54,7 +54,7 @@
                   @if (s.kind === 'summary') {
                     <mat-form-field appearance="outline" class="weight">
                       <mat-label>Poids</mat-label>
-                      <input matInput [disabled]="saving()" type="number" min="0" step="any" data-test="point-weight" [value]="weightDrafts()[p.id] ?? p.weight" (input)="setPointWeight(si, pi, $any($event.target).value)" />
+                      <input matInput [disabled]="saving()" type="text" appNumeric="decimal" data-test="point-weight" [value]="weightDrafts()[p.id] ?? formatNumeric(p.weight)" (input)="setPointWeight(si, pi, $any($event.target).value)" />
                     </mat-form-field>
                     @if (weightError(p.id)) {
                       <span class="field-error" role="alert" data-test="weight-error">Le poids doit être supérieur à 0</span>
@@ -92,6 +92,9 @@
                   <mat-label>Question</mat-label>
                   <input matInput [disabled]="saving()" data-test="question-text" autocomplete="off" [value]="q.text" (input)="setQuestionText(si, qi, $any($event.target).value)" />
                 </mat-form-field>
+                @if (s.kind === 'room') {
+                  <mat-checkbox data-test="question-important" [disabled]="saving()" [checked]="q.important" (change)="setQuestionImportant(si, qi, $event.checked)">Importante</mat-checkbox>
+                }
                 <button mat-button type="button" data-test="question-up" [disabled]="qFirst || saving()" (click)="moveQuestion(si, qi, qi - 1)">Monter</button>
                 <button mat-button type="button" data-test="question-down" [disabled]="qLast || saving()" (click)="moveQuestion(si, qi, qi + 1)">Descendre</button>
                 <button mat-icon-button type="button" data-test="question-remove" [disabled]="saving()" aria-label="Supprimer la question" (click)="removeQuestion(si, qi)"><mat-icon svgIcon="delete" /></button>

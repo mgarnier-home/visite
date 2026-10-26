@@ -225,3 +225,21 @@ func TestJoinClosedVisit(t *testing.T) {
 		t.Fatalf("corps %s", rec.Body.String())
 	}
 }
+
+func TestCreateVisitExcludedSectionIDs(t *testing.T) {
+	router := newTestRouter(t)
+	rec := do(t, router, "POST", "/api/visits", devA,
+		`{"code":"maison-a","fiche":{"address":"1 rue"},"excluded_section_ids":["inconnue"]}`)
+	wantCode(t, rec, 400)
+	if !strings.Contains(rec.Body.String(), "sections exclues invalides") {
+		t.Fatalf("message = %s", rec.Body.String())
+	}
+	rec = do(t, router, "POST", "/api/visits", devA,
+		`{"code":"maison-a","fiche":{"address":"1 rue"},"excluded_section_ids":["sec-garage"]}`)
+	wantCode(t, rec, 201)
+	if strings.Contains(rec.Body.String(), `"name":"Garage"`) || !strings.Contains(rec.Body.String(), `"Autres questions"`) {
+		t.Fatalf("Garage doit être exclu et Autres questions créée : %s", rec.Body.String())
+	}
+	rec = do(t, router, "POST", "/api/visits", devA, `{"code":"maison-b","fiche":{"address":"1 rue"}}`)
+	wantCode(t, rec, 201)
+}

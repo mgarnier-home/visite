@@ -106,6 +106,21 @@ describe('RoomsTabComponent', () => {
     expect(el.querySelector('[data-test=progress]')?.textContent?.trim()).toBe('2 / 9');
   });
 
+  it('affiche N / M posées pour une pièce sans point, les autres gardent remplis / total', () => {
+    const s = makeState();
+    s.rooms.push({ id: 'r4', name: 'Sujet', dir_name: 'sujet', kind: 'topic', position: 4, hidden: false } as VisitState['rooms'][number]);
+    s.questions = ['q1', 'q2', 'q3'].map((id) => ({ id, room_id: 'r4', text: id })) as unknown as VisitState['questions'];
+    s.shared = [
+      { target_id: 'q1', field: 'asked', value: true, updated_at: 1, author: 2 },
+      { target_id: 'q2', field: 'asked', value: false, updated_at: 1, author: 2 },
+    ] as unknown as VisitState['shared'];
+    const { el } = setup(s);
+    const progress = Array.from(el.querySelectorAll('[data-test=room]')).map((r) =>
+      r.querySelector('[data-test=progress]')?.textContent?.trim(),
+    );
+    expect(progress).toEqual(['2 / 9', '0 / 1', '1 / 3 posées']);
+  });
+
   it('masque « À emporter » quand la liste est vide, l\'affiche sinon', () => {
     expect(setup(makeState()).el.querySelector('[data-test=packing]')).toBeNull();
     TestBed.resetTestingModule();

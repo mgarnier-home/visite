@@ -2,6 +2,7 @@ package seed
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mgarnier-home/visite/model"
@@ -19,8 +20,11 @@ func TestSeedTemplate(t *testing.T) {
 		t.Error("packing_list vide")
 	}
 
+	if len(tpl.Sections) != 11 {
+		t.Fatalf("%d sections, attendu 11", len(tpl.Sections))
+	}
 	wantNames := []string{
-		"Questions générales", "Extérieur et structure", "Entrée", "Cuisine",
+		"Questions générales", "Extérieur et structure", "Cuisine",
 		"Salon / séjour", "Chambre", "Salle de bain", "Toilettes", "Garage",
 		"Combles, cave, buanderie, chaufferie", "Environnement et quartier", "Bilan",
 	}
@@ -64,14 +68,13 @@ func TestSeedTemplate(t *testing.T) {
 
 	wantCounts := map[string][2]int{ // points, questions
 		"Questions générales":                  {0, 18},
-		"Extérieur et structure":               {8, 4},
-		"Entrée":                               {4, 3},
+		"Extérieur et structure":               {9, 4},
 		"Cuisine":                              {8, 4},
-		"Salon / séjour":                       {9, 4},
+		"Salon / séjour":                       {9, 3},
 		"Chambre":                              {9, 0},
 		"Salle de bain":                        {8, 4},
 		"Toilettes":                            {5, 2},
-		"Garage":                               {8, 3},
+		"Garage":                               {10, 6},
 		"Combles, cave, buanderie, chaufferie": {5, 4},
 		"Environnement et quartier":            {6, 3},
 		"Bilan":                                {8, 0},
@@ -103,5 +106,62 @@ func TestSeedTemplate(t *testing.T) {
 	if next.Label != "Prochaine étape" || next.Type != model.TypeConstat ||
 		!slices.Equal(next.Options, []string{"Deuxième visite", "Devis artisans", "Offre", "On passe"}) {
 		t.Errorf("prochaine étape = %+v", next)
+	}
+
+	ext := byName["Extérieur et structure"].Points
+	if !strings.HasPrefix(ext[len(ext)-1].Label, "Porte d'entrée") {
+		t.Errorf("dernier point d'Extérieur = %q", ext[len(ext)-1].Label)
+	}
+
+	garage := byName["Garage"]
+	if !strings.HasPrefix(garage.Points[0].Label, "Tableau électrique") ||
+		!strings.HasPrefix(garage.Points[1].Label, "Compteurs") {
+		t.Errorf("points de tête du Garage = %q, %q", garage.Points[0].Label, garage.Points[1].Label)
+	}
+	wantGarageQ := []string{
+		"L'installation électrique a-t-elle été refaite ? Quand ?",
+		"Y a-t-il une alarme ou un visiophone ?",
+		"La fibre est-elle raccordée ?",
+	}
+	for i, w := range wantGarageQ {
+		if garage.Questions[i].Text != w {
+			t.Errorf("question %d du Garage = %q, attendu %q", i, garage.Questions[i].Text, w)
+		}
+	}
+
+	general := byName["Questions générales"].Questions
+	if last := general[len(general)-1]; last.Text != "Y a-t-il un plancher chauffant ou une climatisation ?" ||
+		last.ID != "q-general-plancher" {
+		t.Errorf("dernière question générale = %+v", last)
+	}
+	for _, q := range general {
+		if strings.HasPrefix(q.Text, "Les chambres à l'étage") {
+			t.Errorf("question supprimée encore présente : %q", q.Text)
+		}
+	}
+
+	wantImportant := map[string]int{
+		"Extérieur et structure": 3, "Cuisine": 3, "Salon / séjour": 1,
+		"Salle de bain": 4, "Toilettes": 1, "Garage": 3,
+		"Combles, cave, buanderie, chaufferie": 3, "Environnement et quartier": 3,
+	}
+	total := 0
+	for _, s := range tpl.Sections {
+		n := 0
+		for _, q := range s.Questions {
+			if q.Important {
+				n++
+			}
+		}
+		total += n
+		if n != wantImportant[s.Name] {
+			t.Errorf("%s : %d questions importantes, attendu %d", s.Name, n, wantImportant[s.Name])
+		}
+		if s.Kind == model.KindTopic && n != 0 {
+			t.Errorf("%s (topic) ne doit avoir aucune question importante", s.Name)
+		}
+	}
+	if total != 21 {
+		t.Errorf("%d questions importantes au total, attendu 21", total)
 	}
 }

@@ -1,27 +1,25 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { Observable, Subject, catchError, from, map, of, switchMap, timer } from 'rxjs';
 import { ApiClient, ApiError } from '../../core/api.client';
-import { Fiche, VisitState } from '../../core/api.types';
+import { CreateVisitRequest, Fiche, VisitState } from '../../core/api.types';
 import { CODE_RE, normalizeCode } from '../../core/code';
 import { LocalStore } from '../../core/local-store';
-import { localIsoWithOffset } from '../../core/sync.service';
 import { normalizeCodeWhileTyping } from '../code-typing';
+import { DateTimeInputComponent } from '../../shared/date-time-input.component';
+import { NumericDirective, parseNumeric } from '../../shared/numeric.directive';
+
+type TemplateStatus = 'loading' | 'loaded' | 'failed';
 
 type CodeStatus = 'idle' | 'pending' | 'free' | 'taken' | 'error';
 
-const numberControl = () => new FormControl<number | null>(null, { validators: [Validators.min(0)] });
-/** Refuse une valeur décimale (nombre de pièces, de chambres, année). */
-const integerValidator = (c: AbstractControl): ValidationErrors | null =>
-  c.value === null || c.value === '' || Number.isInteger(c.value) ? null : { integer: true };
-const integerControl = () =>
-  new FormControl<number | null>(null, { validators: [Validators.min(0), integerValidator] });
 const textControl = () => new FormControl<string>('', { nonNullable: true });
 
 /** Classes énergétiques du DPE ; `null` = non renseigné. */
@@ -29,7 +27,7 @@ export const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 @Component({
   selector: 'app-create-page',
-  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [ReactiveFormsModule, DateTimeInputComponent, NumericDirective, RouterLink, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   templateUrl: './create.page.html',
   styleUrl: './create.page.scss',
 })
@@ -45,21 +43,26 @@ export class CreatePage {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
 
+  protected readonly templateStatus = signal<TemplateStatus>('loading');
+  /** Sections `room` du modèle, dans l'ordre du modèle. */
+  protected readonly rooms = signal<{ id: string; name: string }[]>([]);
+  private readonly excludedIds = signal<ReadonlySet<string>>(new Set());
+
   protected readonly form = {
     address: new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }),
-    price_eur: numberControl(),
-    living_area_m2: numberControl(),
-    floor_area_m2: numberControl(),
-    land_area_m2: numberControl(),
-    visit_at: textControl(),
+    price_eur: textControl(),
+    living_area_m2: textControl(),
+    floor_area_m2: textControl(),
+    land_area_m2: textControl(),
+    visit_at: new FormControl<string | null>(null),
     agent_name: textControl(),
     agent_phone: textControl(),
     agent_email: textControl(),
-    construction_year: integerControl(),
+    construction_year: textControl(),
     dpe_energy: new FormControl<string | null>(null),
     dpe_ges: new FormControl<string | null>(null),
-    rooms_count: integerControl(),
-    bedrooms_count: integerControl(),
+    rooms_count: textControl(),
+    bedrooms_count: textControl(),
     listing_url: textControl(),
     heating_type: textControl(),
   };
@@ -72,6 +75,7 @@ export class CreatePage {
   private readonly codeInput$ = new Subject<string>();
 
   constructor() {
+    void this.loadTemplate();
     this.form.address.valueChanges.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe((v) => this.address.set(v));
     this.codeInput$
       .pipe(
@@ -91,6 +95,36 @@ export class CreatePage {
         takeUntilDestroyed(inject(DestroyRef)),
       )
       .subscribe((status) => this.codeStatus.set(status));
+  }
+
+  /** (Re)charge le modèle ; les décochages encore valides sont conservés. */
+  private async loadTemplate(): Promise<void> {
+    try {
+      const template = await this.api.getTemplate();
+      const rooms = template.sections
+        .filter((s) => s.kind === 'room')
+        .map((s) => ({ id: s.id, name: s.name }));
+      const ids = new Set(rooms.map((r) => r.id));
+      this.excludedIds.update((prev) => new Set([...prev].filter((id) => ids.has(id))));
+      this.rooms.set(rooms);
+      this.templateStatus.set('loaded');
+    } catch {
+      this.rooms.set([]);
+      this.templateStatus.set('failed');
+    }
+  }
+
+  protected isRoomIncluded(id: string): boolean {
+    return !this.excludedIds().has(id);
+  }
+
+  protected toggleRoom(id: string, included: boolean): void {
+    this.excludedIds.update((prev) => {
+      const next = new Set(prev);
+      if (included) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   protected onCodeInput(event: Event): void {
@@ -124,22 +158,21 @@ export class CreatePage {
 
   private buildFiche(): Fiche {
     const f = this.form;
-    const visitAt = f.visit_at.value ? new Date(f.visit_at.value) : null;
     return {
       address: f.address.value.trim(),
-      price_eur: f.price_eur.value,
-      living_area_m2: f.living_area_m2.value,
-      floor_area_m2: f.floor_area_m2.value,
-      land_area_m2: f.land_area_m2.value,
-      visit_at: visitAt && !Number.isNaN(visitAt.getTime()) ? localIsoWithOffset(visitAt) : null,
+      price_eur: parseNumeric(f.price_eur.value),
+      living_area_m2: parseNumeric(f.living_area_m2.value),
+      floor_area_m2: parseNumeric(f.floor_area_m2.value),
+      land_area_m2: parseNumeric(f.land_area_m2.value),
+      visit_at: f.visit_at.value,
       agent_name: this.text(f.agent_name.value),
       agent_phone: this.text(f.agent_phone.value),
       agent_email: this.text(f.agent_email.value),
-      construction_year: f.construction_year.value,
+      construction_year: parseNumeric(f.construction_year.value),
       dpe_energy: f.dpe_energy.value,
       dpe_ges: f.dpe_ges.value,
-      rooms_count: f.rooms_count.value,
-      bedrooms_count: f.bedrooms_count.value,
+      rooms_count: parseNumeric(f.rooms_count.value),
+      bedrooms_count: parseNumeric(f.bedrooms_count.value),
       listing_url: this.text(f.listing_url.value),
       heating_type: this.text(f.heating_type.value),
     };
@@ -151,7 +184,10 @@ export class CreatePage {
     this.busy.set(true);
     this.error.set('');
     try {
-      await this.open(code, await this.api.create({ code, fiche: this.buildFiche() }));
+      const req: CreateVisitRequest = { code, fiche: this.buildFiche() };
+      // Sans modèle chargé (en cours ou en échec), le champ est omis : le serveur crée toutes les pièces.
+      if (this.templateStatus() === 'loaded') req.excluded_section_ids = [...this.excludedIds()];
+      await this.open(code, await this.api.create(req));
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         // Réponse d'une création précédente perdue (réseau coupé) : la visite est peut-être la
@@ -163,6 +199,10 @@ export class CreatePage {
         }
         this.codeStatus.set('taken');
         this.error.set('Ce code est déjà pris');
+      } else if (e instanceof ApiError && e.status === 400 && e.message.includes('sections exclues')) {
+        // Le modèle a changé depuis son chargement : prévenir et le recharger.
+        this.error.set('La liste des pièces a changé : vérifiez-la puis recommencez');
+        void this.loadTemplate();
       } else if (e instanceof ApiError && e.status === 0) {
         this.error.set('Il faut du réseau pour créer une visite');
       } else {

@@ -131,9 +131,24 @@ describe('PointCardComponent', () => {
     works.value = '1200';
     works.dispatchEvent(new Event('change'));
     expect(host.setWorks).toHaveBeenLastCalledWith(1200);
-    works.value = '-3';
+    works.value = ',';
     works.dispatchEvent(new Event('change'));
     expect(host.setWorks).toHaveBeenCalledTimes(2);
+    expect(works.value).toBe('500');
+  });
+
+  it('menu : un montant collé dans « Travaux » est envoyé à la sortie du champ', async () => {
+    const { fixture, el, host } = setup();
+    (el.querySelector('[data-test=menu-btn]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const works = document.body.querySelector('[data-test=works-input]') as HTMLInputElement;
+    const paste = new Event('paste', { cancelable: true, bubbles: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: () => '1 500 €' } });
+    works.dispatchEvent(paste);
+    expect(host.setWorks).not.toHaveBeenCalled();
+    works.dispatchEvent(new Event('blur'));
+    expect(host.setWorks).toHaveBeenCalledWith(1500);
   });
 
   it('menu : Échap, même depuis le champ Travaux, ferme le menu', async () => {

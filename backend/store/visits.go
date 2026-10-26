@@ -22,9 +22,26 @@ func (s *Store) VisitExists(ctx context.Context, code string) (bool, error) {
 	return n > 0, nil
 }
 
+// ErrInvalidExcluded signale des sections exclues inconnues ou qui ne sont pas des
+// sections room. Elle enveloppe model.ErrInvalid.
+var ErrInvalidExcluded = fmt.Errorf("%w: sections exclues invalides", model.ErrInvalid)
+
+// otherQuestionsName est le nom de la pièce qui réunit les questions importantes
+// des sections exclues.
+const otherQuestionsName = "Autres questions"
+
 // CreateVisit crée la visite, copie le modèle courant (instantané) et inscrit
 // l'appareil créateur comme participant 1. Erreurs : model.ErrInvalid, ErrConflict.
 func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, creatorDevice string, now time.Time) error {
+	return s.CreateVisitExcluding(ctx, code, f, creatorDevice, now, nil)
+}
+
+// CreateVisitExcluding fait comme CreateVisit sans copier les sections room dont l'id
+// figure dans excluded. Leurs questions importantes sont réunies dans une pièce topic
+// « Autres questions », placée juste après la première section topic (avant s'il n'y en
+// a pas), et créée seulement s'il y en a. Un id inconnu ou non room donne
+// ErrInvalidExcluded, avant toute écriture ; les doublons sont tolérés.
+func (s *Store) CreateVisitExcluding(ctx context.Context, code string, f model.Fiche, creatorDevice string, now time.Time, excluded []string) error {
 	if !model.ValidCode(code) {
 		return fmt.Errorf("%w: code de visite invalide", model.ErrInvalid)
 	}
@@ -40,6 +57,30 @@ func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, cre
 	tpl, err := readTemplate(ctx, tx)
 	if err != nil {
 		return err
+	}
+	skip := make(map[string]bool, len(excluded))
+	for _, id := range excluded {
+		skip[id] = true
+	}
+	matched := 0
+	var other []model.TemplateQuestion
+	for _, sec := range tpl.Sections {
+		if !skip[sec.ID] {
+			continue
+		}
+		if sec.Kind != model.KindRoom {
+			return ErrInvalidExcluded
+		}
+		for _, q := range sec.Questions {
+			if q.Important {
+				other = append(other, model.TemplateQuestion{
+					Text: sec.Name + " : " + q.Text, Position: len(other)})
+			}
+		}
+		matched++
+	}
+	if matched != len(skip) {
+		return ErrInvalidExcluded
 	}
 	ts := now.UTC().Format(time.RFC3339)
 	const seq int64 = 1
@@ -63,10 +104,37 @@ func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, cre
 		bedrooms = *f.BedroomsCount
 	}
 	position := 0
-	for _, sec := range tpl.Sections {
+	// otherAt est l'indice de section avant lequel insérer « Autres questions ».
+	otherAt := 0
+	for i, sec := range tpl.Sections {
+		if sec.Kind == model.KindTopic {
+			otherAt = i + 1
+			break
+		}
+	}
+	addOther := func() error {
+		if len(other) == 0 {
+			return nil
+		}
+		sec := model.TemplateSection{Name: otherQuestionsName, Kind: model.KindTopic, Questions: other}
+		if err := copySection(tx, code, sec, uuid.NewString(), sec.Name, position, seq, ""); err != nil {
+			return err
+		}
+		position++
+		return nil
+	}
+	for i, sec := range tpl.Sections {
+		if i == otherAt {
+			if err := addOther(); err != nil {
+				return err
+			}
+		}
+		if skip[sec.ID] {
+			continue
+		}
 		if sec.Kind == model.KindPerBedroom {
-			for i := 1; i <= bedrooms; i++ {
-				name := sec.Name + " " + strconv.Itoa(i)
+			for n := 1; n <= bedrooms; n++ {
+				name := sec.Name + " " + strconv.Itoa(n)
 				if err := copySection(tx, code, sec, uuid.NewString(), name, position, seq, ""); err != nil {
 					return err
 				}
@@ -78,6 +146,11 @@ func (s *Store) CreateVisit(ctx context.Context, code string, f model.Fiche, cre
 			return err
 		}
 		position++
+	}
+	if otherAt >= len(tpl.Sections) {
+		if err := addOther(); err != nil {
+			return err
+		}
 	}
 
 	if _, err := tx.ExecContext(ctx,

@@ -82,14 +82,14 @@ func readTemplate(ctx context.Context, q querier) (model.Template, error) {
 	}
 
 	rows, err = q.QueryContext(ctx,
-		`SELECT id, section_id, text, position FROM template_questions ORDER BY position, id`)
+		`SELECT id, section_id, text, position, important FROM template_questions ORDER BY position, id`)
 	if err != nil {
 		return t, err
 	}
 	for rows.Next() {
 		var tq model.TemplateQuestion
 		var sectionID string
-		if err := rows.Scan(&tq.ID, &sectionID, &tq.Text, &tq.Position); err != nil {
+		if err := rows.Scan(&tq.ID, &sectionID, &tq.Text, &tq.Position, &tq.Important); err != nil {
 			rows.Close()
 			return t, err
 		}
@@ -172,8 +172,8 @@ func (s *Store) SaveTemplate(ctx context.Context, t model.Template) (model.Templ
 		}
 		for _, q := range sec.Questions {
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO template_questions (id, section_id, text, position) VALUES (?, ?, ?, ?)`,
-				q.ID, sec.ID, q.Text, q.Position); err != nil {
+				`INSERT INTO template_questions (id, section_id, text, position, important) VALUES (?, ?, ?, ?, ?)`,
+				q.ID, sec.ID, q.Text, q.Position, q.Important); err != nil {
 				return model.Template{}, err
 			}
 		}
