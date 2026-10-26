@@ -1,0 +1,5 @@
+# Labels des runners auto-hébergés du homelab (créés à la demande par l'autoscaler).
+self-hosted-runner:
+  labels:
+    - linux/amd64
+    - linux/arm64
