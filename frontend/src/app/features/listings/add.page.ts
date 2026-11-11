@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -79,6 +79,11 @@ const DETECTED: Record<string, string> = {
 export class AddPage {
   private readonly api = inject(ApiClient);
   private readonly router = inject(Router);
+  private destroyed = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destroyed = true));
+  }
 
   protected readonly text = signal('');
   protected readonly busy = signal(false);
@@ -99,7 +104,8 @@ export class AddPage {
     this.error.set(null);
     try {
       const l = await this.api.createListing(this.text());
-      await this.router.navigate(['/annonces', l.id, 'verifier']);
+      // page quittée pendant la récupération : l'annonce est créée, on ne force pas la navigation
+      if (!this.destroyed) await this.router.navigate(['/annonces', l.id, 'verifier']);
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
       const id = (err?.body as { id?: string } | undefined)?.id;

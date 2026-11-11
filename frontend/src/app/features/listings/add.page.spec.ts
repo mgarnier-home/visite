@@ -97,4 +97,15 @@ describe('AddPage', () => {
     expect(s.el.querySelector<HTMLTextAreaElement>('[data-test=text]')!.value).toBe('https://www.leboncoin.fr/ad/3');
     expect(s.submit().disabled).toBe(false);
   });
+
+  it('page quittée pendant l\'appel : pas de navigation', async () => {
+    let resolve!: (l: { id: string }) => void;
+    const s = await setup(vi.fn().mockReturnValue(new Promise((r) => (resolve = r))));
+    s.type('https://www.leboncoin.fr/ad/3');
+    s.submit().click();
+    s.fixture.destroy();
+    resolve({ id: 'abc' });
+    await new Promise((r) => setTimeout(r));
+    expect(s.navigate).not.toHaveBeenCalled();
+  });
 });

@@ -11,7 +11,7 @@ import { formatEur } from '../../core/format';
 import { Listing, ListingStatus } from '../../core/api.types';
 import { CurrentListing } from '../../core/current-listing';
 import { day, dayTime, sourceLabel, specsLine, STATUS_LABELS } from '../../core/listing';
-import { onPageHidden } from '../../core/page-hidden';
+import { onPageHidden, onPageVisible } from '../../core/page-hidden';
 import { DateTimeInputComponent } from '../../shared/date-time-input.component';
 import { ConfirmDialog } from '../room/confirm.dialog';
 
@@ -43,11 +43,31 @@ export class ListingTabComponent {
   protected readonly photoIndex = signal(0);
 
   private notesDraft: string | null = null;
+  /** Envois en cours ; ils partent l'un après l'autre pour garder l'ordre. */
+  private queue: Promise<unknown> = Promise.resolve();
+  private pending = 0;
 
   constructor() {
     onPageHidden(() => void this.saveNotes());
     // navigation sans blur (retour du navigateur, lien Accueil) : le brouillon part quand même
     inject(DestroyRef).onDestroy(() => void this.saveNotes());
+    // un changement fait sur un autre téléphone apparaît à l'entrée sur l'onglet et au retour au premier plan
+    void this.reload();
+    onPageVisible(() => void this.reload());
+  }
+
+  /** Relit l'annonce, sans toucher à un brouillon de notes ni passer devant un envoi en cours. */
+  private async reload(): Promise<void> {
+    const l = this.l();
+    if (!l || this.busy() || this.pending > 0) return;
+    try {
+      const fresh = await this.api.getListing(l.id);
+      if (this.busy() || this.pending > 0) return; // un envoi a démarré : sa réponse fait foi
+      const cur = this.l();
+      this.current.listing.set(this.notesDraft !== null && cur ? { ...fresh, notes: cur.notes } : fresh);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) this.current.deleted.set(true);
+    }
   }
 
   protected readonly statusLabels = STATUS_LABELS;
@@ -128,19 +148,24 @@ export class ListingTabComponent {
     this.photoIndex.set(Math.round(el.scrollLeft / (el.clientWidth || 1)));
   }
 
-  /** Envoie `fields` ; l'annonce renvoyée remplace celle que voient tous les onglets. */
-  protected async patch(fields: Partial<Listing>): Promise<boolean> {
+  /** Envoie `fields` à la suite des envois en cours ; l'annonce renvoyée remplace celle que voient tous les onglets. */
+  protected patch(fields: Partial<Listing>): Promise<boolean> {
+    // sans envoi en cours, on part tout de suite (la destruction du composant n'attend pas un tick)
+    const run = this.pending++ === 0 ? this.send(fields) : this.queue.then(() => this.send(fields));
+    const job = run.finally(() => this.pending--);
+    this.queue = job;
+    return job;
+  }
+
+  private async send(fields: Partial<Listing>): Promise<boolean> {
     const l = this.l();
-    if (!l || this.busy()) return false;
-    this.busy.set(true);
+    if (!l) return false;
     try {
       this.current.listing.set(await this.api.patchListing(l.id, fields));
       return true;
     } catch (e) {
       this.snack.open(`Modification non enregistrée : ${e instanceof ApiError ? e.message : 'erreur'}`, 'OK', { duration: 5000 });
       return false;
-    } finally {
-      this.busy.set(false);
     }
   }
 

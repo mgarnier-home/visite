@@ -21,6 +21,12 @@
     </main>
   }
   @case ('ready') {
+    @if (deleted()) {
+      <main class="message" data-test="deleted">
+        <p>Cette annonce a été supprimée</p>
+        <a mat-stroked-button routerLink="/">Accueil</a>
+      </main>
+    } @else {
     <main class="visit">
       <header>
         <a mat-icon-button routerLink="/" aria-label="Accueil"><mat-icon svgIcon="home" /></a>
@@ -41,5 +47,6 @@
         <router-outlet />
       </mat-tab-nav-panel>
     </main>
+    }
   }
 }

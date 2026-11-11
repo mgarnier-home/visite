@@ -38,6 +38,7 @@ export class VisitShellPage implements OnDestroy {
   protected readonly id = signal('');
 
   protected readonly phase = signal<Phase>('loading');
+  protected readonly deleted = this.current.deleted;
   private destroyed = false;
   /** Jeton de la dernière ouverture : le résultat d'un code précédent est ignoré. */
   private token = 0;
@@ -74,6 +75,7 @@ export class VisitShellPage implements OnDestroy {
     this.id.set(id);
     this.phase.set('loading');
     this.current.listing.set(null);
+    this.current.deleted.set(false);
     try {
       const listing = await this.api.getListing(id);
       if (stale()) return;
@@ -94,5 +96,6 @@ export class VisitShellPage implements OnDestroy {
     this.destroyed = true;
     this.sync.close();
     this.current.listing.set(null);
+    this.current.deleted.set(false);
   }
 }

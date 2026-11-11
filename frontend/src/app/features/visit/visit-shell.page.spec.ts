@@ -109,6 +109,15 @@ describe('VisitShellPage', () => {
     expect(sync.open).not.toHaveBeenCalled();
   });
 
+  it('annonce supprimée par quelqu\'un d\'autre : message et lien vers l\'accueil', async () => {
+    const { fixture, el } = await setup();
+    TestBed.inject(CurrentListing).deleted.set(true);
+    fixture.detectChanges();
+    expect(text(el, '[data-test=deleted]')).toContain('Cette annonce a été supprimée');
+    expect(el.querySelector('[data-test=deleted] a[href="/"]')).not.toBeNull();
+    expect(el.querySelector('router-outlet')).toBeNull();
+  });
+
   it('annonce inconnue (404) : message dédié', async () => {
     api.getListing.mockRejectedValue(new ApiError(404, 'not found'));
     const { el } = await setup();

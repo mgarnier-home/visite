@@ -2,7 +2,9 @@
   <header class="top">
     <div class="title">
       <h1>Visite</h1>
-      <span class="count">{{ tracked() }} {{ tracked() > 1 ? "annonces suivies" : "annonce suivie" }} · {{ dropped().length }} {{ dropped().length > 1 ? "écartées" : "écartée" }}</span>
+      @if (!loading() && !error()) {
+        <span class="count" data-test="count">{{ tracked() }} {{ tracked() > 1 ? "annonces suivies" : "annonce suivie" }} · {{ dropped().length }} {{ dropped().length > 1 ? "écartées" : "écartée" }}</span>
+      }
     </div>
     <a mat-button routerLink="/modele">Modèle de visite</a>
     <a mat-flat-button class="add" data-test="add" routerLink="/annonces/nouvelle">
@@ -10,9 +12,12 @@
     </a>
   </header>
 
-  @if (error()) {
+  @if (loading()) {
+    <p class="empty" data-test="loading">Chargement…</p>
+  } @else if (error()) {
     <p class="notice" data-test="load-error">Impossible de charger les annonces</p>
-  } @else if (!loading() && listings().length === 0) {
+    <button mat-stroked-button type="button" data-test="retry" (click)="load()">Réessayer</button>
+  } @else if (listings().length === 0) {
     <p class="empty">Aucune annonce pour l'instant.</p>
   }
 

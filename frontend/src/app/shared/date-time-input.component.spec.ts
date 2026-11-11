@@ -99,20 +99,25 @@ describe('DateTimeInputComponent', () => {
     expect(timeInput.getAttribute('placeholder')).toBe('HH:MM');
   });
 
-  it('heure invalide : « Heure invalide » et rien d\'émis', async () => {
+  it('heure invalide : « Heure invalide » et null émis', async () => {
     const { el, typeDate, typeTime, emitted } = await setup();
     await typeDate('25/10/2026');
-    const before = emitted.length;
     await typeTime('2575');
     expect(el.textContent).toContain('Heure invalide');
-    expect(emitted.length).toBe(before);
+    expect(emitted[emitted.length - 1]).toBeNull();
   });
 
-  it('date illisible : « Date invalide » et rien d\'émis', async () => {
+  it('date illisible : « Date invalide » et null émis', async () => {
     const { el, typeDate, emitted } = await setup();
     await typeDate('32/13/2026');
     expect(el.textContent).toContain('Date invalide');
-    expect(emitted).toEqual([]);
+    expect(emitted[emitted.length - 1]).toBeNull();
+  });
+
+  it('valeur valide puis heure invalide : null émis dès la frappe, sans blur', async () => {
+    const { typeTime, emitted } = await setup('2026-10-25T14:30:00+01:00');
+    await typeTime('25', false);
+    expect(emitted[emitted.length - 1]).toBeNull();
   });
 
   it('effacer la date émet null', async () => {
@@ -128,10 +133,10 @@ describe('DateTimeInputComponent', () => {
     expect(timeInput.value).toBe(time);
   });
 
-  it.each(['25/10/26', '25', '25/10'])('date incomplète « %s » : « Date invalide » et rien d\'émis', async (text) => {
+  it.each(['25/10/26', '25', '25/10'])('date incomplète « %s » : « Date invalide » et null émis', async (text) => {
     const { el, typeDate, emitted } = await setup();
     await typeDate(text);
     expect(el.textContent).toContain('Date invalide');
-    expect(emitted).toEqual([]);
+    expect(emitted[emitted.length - 1]).toBeNull();
   });
 });

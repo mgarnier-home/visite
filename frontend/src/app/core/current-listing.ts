@@ -5,4 +5,6 @@ import { Listing } from './api.types';
 @Injectable({ providedIn: 'root' })
 export class CurrentListing {
   readonly listing = signal<Listing | null>(null);
+  /** L'annonce a été supprimée (par un autre participant) pendant qu'elle était ouverte. */
+  readonly deleted = signal(false);
 }

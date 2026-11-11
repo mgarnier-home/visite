@@ -44,10 +44,19 @@ export class ListingsPage {
   protected readonly tracked = computed(() => this.listings().length - this.dropped().length);
 
   constructor() {
-    this.api.listListings().then(
-      (l) => this.listings.set(l),
-      () => this.error.set(true),
-    ).finally(() => this.loading.set(false));
+    void this.load();
+  }
+
+  protected async load(): Promise<void> {
+    this.loading.set(true);
+    this.error.set(false);
+    try {
+      this.listings.set(await this.api.listListings());
+    } catch {
+      this.error.set(true);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   protected photo(l: Listing): string | null {

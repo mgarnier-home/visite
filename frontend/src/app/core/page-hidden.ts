@@ -19,3 +19,13 @@ export function onPageHidden(callback: () => void): void {
     win?.removeEventListener('pagehide', callback);
   });
 }
+
+/** Appelle callback quand l'application revient au premier plan (`visibilitychange` → visible). */
+export function onPageVisible(callback: () => void): void {
+  const document = inject(DOCUMENT);
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') callback();
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  inject(DestroyRef).onDestroy(() => document.removeEventListener('visibilitychange', onVisibility));
+}

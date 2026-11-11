@@ -138,4 +138,21 @@ describe('EditPage', () => {
     await s.click('[data-test=cancel]');
     expect(s.api.deleteListing).not.toHaveBeenCalled();
   });
+
+  it('statut « Visite planifiée » : visit_at est envoyé', async () => {
+    const s = await setup(listing());
+    await s.click('[data-test="status-planned"]');
+    (s.fixture.componentInstance as unknown as { setVisit(v: string): void }).setVisit('2030-12-25T14:30:00+01:00');
+    s.fixture.detectChanges();
+    await s.click('[data-test=save]');
+    expect(s.api.patchListing.mock.calls[0][1]).toMatchObject({ status: 'planned', visit_at: '2030-12-25T14:30:00+01:00' });
+  });
+
+  it('PATCH en échec : message save-error, pas de navigation', async () => {
+    const s = await setup(listing());
+    s.api.patchListing.mockRejectedValue(new Error('Réseau indisponible'));
+    await s.click('[data-test=save]');
+    expect(s.el.querySelector('[data-test=save-error]')!.textContent).toContain('Réseau indisponible');
+    expect(s.navigate).not.toHaveBeenCalled();
+  });
 });

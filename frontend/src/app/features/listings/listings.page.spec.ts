@@ -86,4 +86,46 @@ describe('ListingsPage', () => {
     expect(add.textContent).toContain('Ajouter une annonce');
     expect(el.querySelector('a[href="/modele"]')).not.toBeNull();
   });
+
+  it('chargement : « Chargement… » sans compteur', async () => {
+    TestBed.configureTestingModule({
+      imports: [ListingsPage],
+      providers: [
+        { provide: ApiClient, useValue: { listListings: () => new Promise(() => undefined) } },
+        { provide: BreakpointObserver, useValue: { observe: () => new BehaviorSubject({ matches: false, breakpoints: {} }) } },
+        provideRouter([]),
+        provideAppIcons(),
+      ],
+    });
+    const f = TestBed.createComponent(ListingsPage);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test=loading]')!.textContent).toContain('Chargement…');
+    expect(el.querySelector('.count')).toBeNull();
+  });
+
+  it('erreur : « Réessayer » relance le chargement', async () => {
+    const listListings = vi.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValue([listing('contact')]);
+    TestBed.configureTestingModule({
+      imports: [ListingsPage],
+      providers: [
+        { provide: ApiClient, useValue: { listListings, listingPhotoUrl: () => '' } },
+        { provide: BreakpointObserver, useValue: { observe: () => new BehaviorSubject({ matches: false, breakpoints: {} }) } },
+        provideRouter([]),
+        provideAppIcons(),
+      ],
+    });
+    const f = TestBed.createComponent(ListingsPage);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test=load-error]')).not.toBeNull();
+    el.querySelector<HTMLButtonElement>('[data-test=retry]')!.click();
+    await f.whenStable();
+    f.detectChanges();
+    expect(listListings).toHaveBeenCalledTimes(2);
+    expect(el.querySelector('[data-test=load-error]')).toBeNull();
+    expect(el.querySelectorAll('[data-test=card]').length).toBe(1);
+  });
 });

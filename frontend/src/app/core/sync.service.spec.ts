@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient, ApiError } from './api.client';
+import { CurrentListing } from './current-listing';
 import { Op, OpResult, OpsResponse, VisitState } from './api.types';
 import { localIsoWithOffset, SyncService } from './sync.service';
 
@@ -189,6 +190,15 @@ describe('SyncService', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(api.changes).toHaveBeenCalledTimes(2);
     expect(svc.status().error).toBeNull();
+  });
+
+  it('404 de la récupération : annonce marquée supprimée, plus aucune récupération', async () => {
+    api.changes.mockRejectedValue(new ApiError(404, 'annonce introuvable'));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(TestBed.inject(CurrentListing).deleted()).toBe(true);
+    expect(svc.status().error).toBeNull();
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(api.changes).toHaveBeenCalledTimes(1);
   });
 
   it('dispatch sans visite ouverte échoue', async () => {

@@ -1,6 +1,7 @@
 import { DestroyRef, DOCUMENT, inject, Injectable, signal } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
-import { ApiClient } from './api.client';
+import { ApiClient, ApiError } from './api.client';
+import { CurrentListing } from './current-listing';
 import { Op, OpResult, OpType, VisitState } from './api.types';
 import { applyOp, mergeChanges } from './reducer';
 
@@ -44,6 +45,7 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export class SyncService {
   private readonly api = inject(ApiClient);
   private readonly document = inject(DOCUMENT);
+  private readonly current = inject(CurrentListing);
 
   private readonly stateSig = signal<VisitState | null>(null);
   private readonly statusSig = signal<SyncStatus>(IDLE_STATUS);
@@ -195,6 +197,11 @@ export class SyncService {
           if (generation === this.generation) this.patchStatus({ error: null });
         }
       } catch (e) {
+        if (generation === this.generation && e instanceof ApiError && e.status === 404) {
+          // annonce supprimée par un autre participant : inutile de réessayer
+          this.current.deleted.set(true);
+          return;
+        }
         if (generation === this.generation) this.patchStatus({ error: `Mise à jour impossible : ${messageOf(e)}` });
       }
     }

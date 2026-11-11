@@ -38,6 +38,7 @@ describe('ListingTabComponent', () => {
     vi.resetAllMocks();
     dialog.open.mockReturnValue({ afterClosed: () => of(true) });
     api.patchListing.mockImplementation(async (_id: string, f: object) => ({ ...current(), ...f }));
+    api.getListing.mockImplementation(async () => current());
     TestBed.configureTestingModule({
       providers: [
         { provide: ApiClient, useValue: api },
@@ -272,5 +273,86 @@ describe('ListingTabComponent', () => {
     btn(el, 'Supprimer')!.click();
     await settle();
     expect(api.deleteListing).not.toHaveBeenCalled();
+  });
+
+  describe('file des PATCH', () => {
+    it('notes en cours d\'envoi puis « Mail envoyé » : les deux PATCH partent, dans l\'ordre', async () => {
+      let release!: () => void;
+      api.patchListing.mockImplementationOnce(
+        (_id: string, f: object) => new Promise((r) => (release = () => r({ ...current(), ...f }))),
+      );
+      const { el, settle } = await setup('contact');
+      const area = q(el, 'textarea') as HTMLTextAreaElement;
+      area.value = 'Prix négociable';
+      area.dispatchEvent(new Event('input'));
+      area.dispatchEvent(new Event('blur'));
+      await settle();
+      btn(el, 'Mail envoyé')!.click();
+      await settle();
+      expect(api.patchListing).toHaveBeenCalledTimes(1);
+      release();
+      await new Promise((r) => setTimeout(r));
+      await settle();
+      expect(api.patchListing.mock.calls.map((c) => c[1])).toEqual([{ notes: 'Prix négociable' }, { status: 'mail' }]);
+      expect(current().status).toBe('mail');
+      expect(current().notes).toBe('Prix négociable');
+    });
+  });
+
+  describe('date de visite invalide', () => {
+    it('saisie valide puis invalide : « Enregistrer » désactivé, aucun PATCH avec l\'ancienne date', async () => {
+      const { el, settle } = await setup('planned');
+      btn(el, 'Changer la date')!.click();
+      await settle();
+      const time = q(el, '[data-test=time]') as HTMLInputElement;
+      time.value = '2575';
+      time.dispatchEvent(new Event('input'));
+      await settle();
+      const save = btn(el, 'Enregistrer') as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      save.click();
+      await settle();
+      expect(api.patchListing).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('relecture de l\'annonce', () => {
+    const visible = () => {
+      const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      return spy;
+    };
+
+    it('à l\'entrée sur l\'onglet et au retour au premier plan', async () => {
+      const { settle } = await setup('contact');
+      await settle();
+      expect(api.getListing).toHaveBeenCalledTimes(1);
+      api.getListing.mockResolvedValue(make('mail', { price_eur: 1 }));
+      const spy = visible();
+      await settle();
+      spy.mockRestore();
+      expect(api.getListing).toHaveBeenCalledTimes(2);
+      expect(current().status).toBe('mail');
+    });
+
+    it('ne remplace pas un brouillon de notes en cours de saisie', async () => {
+      const { el, settle } = await setup('contact');
+      const area = q(el, 'textarea') as HTMLTextAreaElement;
+      area.value = 'brouillon';
+      area.dispatchEvent(new Event('input'));
+      api.getListing.mockResolvedValue(make('mail', { notes: 'ailleurs' }));
+      const spy = visible();
+      await settle();
+      spy.mockRestore();
+      expect(current().status).toBe('mail');
+      expect(current().notes).toBe('Agent sympa');
+    });
+
+    it('annonce introuvable : marque l\'annonce comme supprimée', async () => {
+      api.getListing.mockRejectedValue(new ApiError(404, 'annonce introuvable'));
+      const { settle } = await setup('contact');
+      await settle();
+      expect(TestBed.inject(CurrentListing).deleted()).toBe(true);
+    });
   });
 });
