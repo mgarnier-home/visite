@@ -1,7 +1,7 @@
 # Visite 2.0 — suivi des annonces
 
 Date : 2026-11-11
-Statut : en relecture
+Statut : validée le 2026-11-11
 Remplace, pour ce qu'il traite, la spec v1 (`2026-10-25-visite-maison-design.md`) et les retours
 n° 1 (`2026-10-25-retours-1-design.md`). Version : 2.0.0, sans compatibilité avec la 0.0.x.
 Maquettes : `docs/maquettes/` (canevas : https://claude.ai/artifact/HMTcP2PP8vePzWvM9WEQmG).
@@ -222,7 +222,7 @@ est nul ; passer à `planned` demande `visit_at` ; passer à `done` renseigne `v
 ## 10. Hors périmètre
 
 - Leboncoin automatique (pistes notées : bouton dans le navigateur, ou partage depuis Jinka).
-- Ajout ou suppression manuelle de photos d'annonce.
+- Ajout ou suppression manuelle de photos d’annonce (retiré des maquettes).
 - Plusieurs visites par annonce.
 - Rafraîchissement planifié dans l'application, alertes de baisse de prix.
 - Volume de données sur apollon (le propriétaire s'en charge dans orchestrator).

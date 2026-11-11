@@ -8,7 +8,7 @@ navigateur). Spec : `../superpowers/specs/2026-11-11-v2-annonces-design.md`.
 | -- | ----------------- | ------------------------------------------------------------------------ |
 | 1  | `Main.dc.html`    | Accueil sur téléphone : sections par statut, écartées repliées           |
 | 2  | `Ajout.dc.html`   | Ajouter : coller le texte partagé, lien repéré                           |
-| 3  | `Apercu.dc.html`  | Vérifier les infos récupérées ; réglage `site` pour la saisie manuelle   |
+| 3  | `Apercu.dc.html`  | Vérifier les infos récupérées ; réglage `site` pour la saisie manuelle (sans ajout de photos) |
 | 4  | `Annonce.dc.html` | Onglet Annonce (Annonce \| Pièces \| Questions \| Bilan) ; réglage `statut` |
 | 5  | `Bureau.dc.html`  | Accueil sur ordinateur : une colonne par statut                          |
 
