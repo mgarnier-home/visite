@@ -20,44 +20,76 @@ CREATE TABLE template_points (
     type       TEXT NOT NULL,
     options    TEXT NOT NULL DEFAULT '[]', -- liste JSON
     weight     REAL NOT NULL DEFAULT 1,
-    position   INTEGER NOT NULL
+    position   INTEGER NOT NULL,
+    important  INTEGER NOT NULL DEFAULT 1 -- affiché par défaut ; sinon secondaire
 );
 
 CREATE TABLE template_questions (
     id         TEXT PRIMARY KEY,
     section_id TEXT NOT NULL REFERENCES template_sections(id) ON DELETE CASCADE,
     text       TEXT NOT NULL,
-    position   INTEGER NOT NULL
+    position   INTEGER NOT NULL,
+    important  INTEGER NOT NULL DEFAULT 0 -- repris dans « Autres questions » ; indicateur d'affichage
 );
 
--- Visites ; created_at et closed_at en RFC 3339 (TEXT).
--- visit_seq : compteur de la visite. fiche_ts : JSON {champ: [updated_at, device_id]}.
--- seq_changed : seq de la dernière modification de la fiche ou de la clôture.
-CREATE TABLE visits (
-    code              TEXT PRIMARY KEY,
-    creator_device_id TEXT NOT NULL,
+-- Annonces suivies ; dates en RFC 3339 (TEXT), features en liste JSON, raw : réponse brute du site.
+CREATE TABLE listings (
+    id                TEXT PRIMARY KEY,
+    source            TEXT NOT NULL,
+    url               TEXT NOT NULL UNIQUE,
+    status            TEXT NOT NULL DEFAULT 'contact',
     created_at        TEXT NOT NULL,
-    closed_at         TEXT,
-    address           TEXT NOT NULL DEFAULT '',
-    price_eur         REAL,
-    living_area_m2    REAL,
-    floor_area_m2     REAL,
-    land_area_m2      REAL,
+    mail_sent_at      TEXT,
     visit_at          TEXT,
-    agent_name        TEXT,
-    agent_phone       TEXT,
-    agent_email       TEXT,
+    visited_at        TEXT,
+    fetched_at        TEXT,
+    removed_at        TEXT,
+    fetch_error       TEXT NOT NULL DEFAULT '',
+    title             TEXT NOT NULL DEFAULT '',
+    property_type     TEXT NOT NULL DEFAULT '',
+    price_eur         REAL,
+    rooms             INTEGER,
+    bedrooms          INTEGER,
+    bathrooms         INTEGER,
+    shower_rooms      INTEGER,
+    toilets           INTEGER,
+    parking           INTEGER,
+    floor             INTEGER,
     construction_year INTEGER,
-    dpe_energy        TEXT,
-    dpe_ges           TEXT,
-    rooms_count       INTEGER,
-    bedrooms_count    INTEGER,
-    listing_url       TEXT,
-    heating_type      TEXT,
-    packing_list      TEXT NOT NULL DEFAULT '',
-    fiche_ts          TEXT NOT NULL DEFAULT '{}',
-    seq_changed       INTEGER NOT NULL DEFAULT 0,
-    seq               INTEGER NOT NULL DEFAULT 0
+    living_area_m2    REAL,
+    land_area_m2      REAL,
+    dpe               TEXT NOT NULL DEFAULT '',
+    ges               TEXT NOT NULL DEFAULT '',
+    heating           TEXT NOT NULL DEFAULT '',
+    city              TEXT NOT NULL DEFAULT '',
+    postal_code       TEXT NOT NULL DEFAULT '',
+    address           TEXT NOT NULL DEFAULT '',
+    description       TEXT NOT NULL DEFAULT '',
+    agency            TEXT NOT NULL DEFAULT '',
+    agent_phone       TEXT NOT NULL DEFAULT '',
+    agent_email       TEXT NOT NULL DEFAULT '',
+    features          TEXT NOT NULL DEFAULT '[]',
+    notes             TEXT NOT NULL DEFAULT '',
+    raw               TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE listing_photos (
+    id         TEXT PRIMARY KEY,
+    listing_id TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+    position   INTEGER NOT NULL,
+    source_url TEXT NOT NULL,
+    path       TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    UNIQUE (listing_id, source_url)
+);
+
+-- Visites : code contient l'id de l'annonce. seq : compteur de la visite.
+CREATE TABLE visits (
+    code         TEXT PRIMARY KEY REFERENCES listings(id) ON DELETE CASCADE,
+    created_at   TEXT NOT NULL,
+    packing_list TEXT NOT NULL DEFAULT '',
+    seq_changed  INTEGER NOT NULL DEFAULT 0,
+    seq          INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE visit_rooms (
@@ -81,6 +113,7 @@ CREATE TABLE visit_points (
     options  TEXT NOT NULL DEFAULT '[]', -- liste JSON
     weight   REAL NOT NULL DEFAULT 1,
     position INTEGER NOT NULL,
+    important INTEGER NOT NULL DEFAULT 1,
     seq      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX visit_points_room ON visit_points(room_id);
@@ -90,6 +123,7 @@ CREATE TABLE visit_questions (
     room_id  TEXT NOT NULL REFERENCES visit_rooms(id) ON DELETE CASCADE,
     text     TEXT NOT NULL,
     position INTEGER NOT NULL,
+    important INTEGER NOT NULL DEFAULT 1,
     seq      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX visit_questions_room ON visit_questions(room_id);

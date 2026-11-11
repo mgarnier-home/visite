@@ -29,8 +29,6 @@ const (
 	TypeSetRating   = "set_rating"
 	TypeSetComment  = "set_comment"
 	TypeSetShared   = "set_shared"
-	TypeSetFiche    = "set_fiche"
-	TypeCloseVisit  = "close_visit"
 )
 
 // Résultats et motifs de refus.
@@ -39,10 +37,8 @@ const (
 	ResultDuplicate = "duplicate"
 	ResultRejected  = "rejected"
 
-	ReasonClosed    = "closed"
-	ReasonForbidden = "forbidden"
-	ReasonNotFound  = "not_found"
-	ReasonInvalid   = "invalid"
+	ReasonNotFound = "not_found"
+	ReasonInvalid  = "invalid"
 )
 
 // Wins indique si l'écriture (opTS, opDev) l'emporte sur la valeur stockée :

@@ -7,27 +7,6 @@ import (
 	"testing"
 )
 
-func TestValidCode(t *testing.T) {
-	tests := []struct {
-		code string
-		want bool
-	}{
-		{"maison-nantes-centre", true},
-		{"ab", false},
-		{"abc", true},
-		{"-abc", false},
-		{"abc-", false},
-		{"Maison", false},
-		{strings.Repeat("a", 60), true},
-		{strings.Repeat("a", 61), false},
-	}
-	for _, tt := range tests {
-		if got := ValidCode(tt.code); got != tt.want {
-			t.Errorf("ValidCode(%q) = %v, want %v", tt.code, got, tt.want)
-		}
-	}
-}
-
 func TestSlugify(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"Cuisine", "cuisine"},
@@ -151,36 +130,6 @@ func TestTemplateValidateIDs(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
-func TestFicheValidate(t *testing.T) {
-	tests := []struct {
-		name string
-		f    Fiche
-		ok   bool
-	}{
-		{"adresse seule", Fiche{Address: "1 rue X"}, true},
-		{"adresse vide", Fiche{Address: "  "}, false},
-		{"dpe_energy H", Fiche{Address: "a", DPEEnergy: ptr("H")}, false},
-		{"dpe_energy C", Fiche{Address: "a", DPEEnergy: ptr("C")}, true},
-		{"dpe_ges H", Fiche{Address: "a", DPEGES: ptr("H")}, false},
-		{"bedrooms 21", Fiche{Address: "a", BedroomsCount: ptr(21)}, false},
-		{"bedrooms 20", Fiche{Address: "a", BedroomsCount: ptr(20)}, true},
-		{"bedrooms négatif", Fiche{Address: "a", BedroomsCount: ptr(-1)}, false},
-		{"rooms négatif", Fiche{Address: "a", RoomsCount: ptr(-1)}, false},
-		{"prix négatif", Fiche{Address: "a", PriceEUR: ptr(-1.0)}, false},
-		{"surface négative", Fiche{Address: "a", LivingAreaM2: ptr(-1.0)}, false},
-		{"terrain négatif", Fiche{Address: "a", LandAreaM2: ptr(-1.0)}, false},
-	}
-	for _, tt := range tests {
-		err := tt.f.Validate()
-		if (err == nil) != tt.ok {
-			t.Errorf("%s : err = %v, ok attendu = %v", tt.name, err, tt.ok)
-		}
-		if err != nil && !errors.Is(err, ErrInvalid) {
-			t.Errorf("%s : l'erreur doit envelopper ErrInvalid : %v", tt.name, err)
-		}
-	}
-}
-
 func TestValidSharedValue(t *testing.T) {
 	caseP := &Point{Type: TypeCase}
 	constatP := &Point{Type: TypeConstat, Options: []string{"bon", "usé"}}
@@ -224,9 +173,6 @@ func TestValidSharedValue(t *testing.T) {
 		{"notes pièce vides", TargetRoom, nil, "notes", `""`, true},
 		{"notes pièce nombre", TargetRoom, nil, "notes", `3`, false},
 		{"notes pièce null", TargetRoom, nil, "notes", `null`, false},
-		{"notes visite", TargetVisit, nil, "notes", `"Rappeler l'agent"`, true},
-		{"notes visite null", TargetVisit, nil, "notes", `null`, false},
-		{"area visite", TargetVisit, nil, "area_m2", `12`, false},
 		{"notes point", TargetPoint, noteP, "notes", `"x"`, false},
 		{"notes question", TargetQuestion, nil, "notes", `"x"`, false},
 	}

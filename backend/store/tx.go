@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -36,41 +35,17 @@ func (s *Store) InTx(ctx context.Context, fn func(*Tx) error) error {
 
 // VisitRow : ce qu'il faut savoir d'une visite pour appliquer une opération.
 type VisitRow struct {
-	Closed        bool
-	CreatorDevice string
-	Fiche         model.Fiche
-	Seq           int64
+	Seq int64
 }
-
-// ficheColumns : champs de la fiche, identiques aux noms JSON et aux colonnes de visits.
-var ficheColumns = []string{
-	"address", "price_eur", "living_area_m2", "floor_area_m2", "land_area_m2", "visit_at",
-	"agent_name", "agent_phone", "agent_email", "construction_year", "dpe_energy", "dpe_ges",
-	"rooms_count", "bedrooms_count", "listing_url", "heating_type",
-}
-
-func isFicheColumn(name string) bool { return slices.Contains(ficheColumns, name) }
 
 // Visit lit la visite ; ErrNotFound si elle n'existe pas.
 func (t *Tx) Visit(code string) (VisitRow, error) {
 	var v VisitRow
-	var closedAt sql.NullString
-	f := &v.Fiche
-	err := t.tx.QueryRowContext(t.ctx,
-		`SELECT closed_at, creator_device_id, seq, `+strings.Join(ficheColumns, ", ")+`
-		 FROM visits WHERE code = ?`, code).Scan(
-		&closedAt, &v.CreatorDevice, &v.Seq,
-		&f.Address, &f.PriceEUR, &f.LivingAreaM2, &f.FloorAreaM2, &f.LandAreaM2, &f.VisitAt,
-		&f.AgentName, &f.AgentPhone, &f.AgentEmail, &f.ConstructionYear, &f.DPEEnergy, &f.DPEGES,
-		&f.RoomsCount, &f.BedroomsCount, &f.ListingURL, &f.HeatingType)
+	err := t.tx.QueryRowContext(t.ctx, `SELECT seq FROM visits WHERE code = ?`, code).Scan(&v.Seq)
 	if errors.Is(err, sql.ErrNoRows) {
 		return VisitRow{}, ErrNotFound
 	}
-	if err != nil {
-		return VisitRow{}, err
-	}
-	v.Closed = closedAt.Valid
-	return v, nil
+	return v, err
 }
 
 // OpRecord : une ligne du journal des opérations.
@@ -251,14 +226,6 @@ func (t *Tx) InsertQuestion(q model.Question, seq int64) error {
 	return err
 }
 
-// CloseVisit clôture la visite à la date at.
-func (t *Tx) CloseVisit(code string, at time.Time, seq int64) error {
-	_, err := t.tx.ExecContext(t.ctx,
-		`UPDATE visits SET closed_at = ?, seq_changed = ? WHERE code = ?`,
-		at.UTC().Format(time.RFC3339), seq, code)
-	return err
-}
-
 // LWWKind désigne une valeur soumise à la règle « dernière écriture gagnante ».
 type LWWKind int
 
@@ -266,11 +233,10 @@ const (
 	KindRating  LWWKind = iota // clé (point_id, device_id)
 	KindComment                // clé (room_id, device_id)
 	KindShared                 // clé (target_id, field)
-	KindFiche                  // clé (code de la visite, champ de la fiche)
 )
 
-// LWWKey identifie une valeur : ID est le point, la pièce, la cible ou la visite,
-// Sub l'appareil (notes, commentaires) ou le champ (valeurs partagées, fiche).
+// LWWKey identifie une valeur : ID est le point, la pièce ou la cible,
+// Sub l'appareil (notes, commentaires) ou le champ (valeurs partagées).
 type LWWKey struct {
 	ID, Sub string
 }
@@ -289,23 +255,6 @@ func (t *Tx) GetLWW(kind LWWKind, key LWWKey) (ts int64, device string, ok bool,
 	case KindShared:
 		row = t.tx.QueryRowContext(t.ctx,
 			`SELECT updated_at, device_id FROM shared_values WHERE target_id = ? AND field = ?`, key.ID, key.Sub)
-	case KindFiche:
-		if !isFicheColumn(key.Sub) {
-			return 0, "", false, fmt.Errorf("champ de fiche inconnu %q", key.Sub)
-		}
-		// fiche_ts : {champ: [updated_at, device_id]}.
-		var nts sql.NullInt64
-		var ndev sql.NullString
-		err = t.tx.QueryRowContext(t.ctx,
-			`SELECT json_extract(fiche_ts, '$.' || ? || '[0]'), json_extract(fiche_ts, '$.' || ? || '[1]')
-			 FROM visits WHERE code = ?`, key.Sub, key.Sub, key.ID).Scan(&nts, &ndev)
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", false, ErrNotFound
-		}
-		if err != nil || !nts.Valid {
-			return 0, "", false, err
-		}
-		return nts.Int64, ndev.String, true, nil
 	default:
 		return 0, "", false, fmt.Errorf("type de valeur inconnu %d", kind)
 	}
@@ -320,7 +269,6 @@ func (t *Tx) GetLWW(kind LWWKind, key LWWKey) (ts int64, device string, ok bool,
 }
 
 // PutLWW écrit la valeur (JSON déjà validé) avec son horodatage, son appareil et seq.
-// Pour la fiche, met aussi à jour fiche_ts et seq_changed.
 func (t *Tx) PutLWW(kind LWWKind, key LWWKey, value json.RawMessage, ts int64, device string, seq int64) error {
 	switch kind {
 	case KindRating:
@@ -356,28 +304,12 @@ func (t *Tx) PutLWW(kind LWWKind, key LWWKey, value json.RawMessage, ts int64, d
 			 SET value = excluded.value, updated_at = excluded.updated_at, device_id = excluded.device_id, seq = excluded.seq`,
 			key.ID, key.Sub, compact.String(), ts, device, seq)
 		return err
-	case KindFiche:
-		if !isFicheColumn(key.Sub) {
-			return fmt.Errorf("champ de fiche inconnu %q", key.Sub)
-		}
-		var v any
-		if err := json.Unmarshal(value, &v); err != nil {
-			return fmt.Errorf("fiche %s: %w", key.Sub, err)
-		}
-		// key.Sub est une colonne de ficheColumns : l'insérer dans la requête est sûr.
-		_, err := t.tx.ExecContext(t.ctx,
-			`UPDATE visits SET `+key.Sub+` = ?,
-			 fiche_ts = json_set(fiche_ts, '$.' || ?, json_array(?, ?)), seq_changed = ?
-			 WHERE code = ?`,
-			v, key.Sub, ts, device, seq, key.ID)
-		return err
 	}
 	return fmt.Errorf("type de valeur inconnu %d", kind)
 }
 
 // TouchLWW donne le seq à la valeur stockée sans la modifier : une écriture perdante la
 // fait ainsi renvoyer par /changes, pour que son expéditeur reprenne la valeur gagnante.
-// Pour la fiche, seul seq_changed avance.
 func (t *Tx) TouchLWW(kind LWWKind, key LWWKey, seq int64) error {
 	var query string
 	switch kind {
@@ -387,9 +319,6 @@ func (t *Tx) TouchLWW(kind LWWKind, key LWWKey, seq int64) error {
 		query = `UPDATE room_comments SET seq = ? WHERE room_id = ? AND device_id = ?`
 	case KindShared:
 		query = `UPDATE shared_values SET seq = ? WHERE target_id = ? AND field = ?`
-	case KindFiche:
-		_, err := t.tx.ExecContext(t.ctx, `UPDATE visits SET seq_changed = ? WHERE code = ?`, seq, key.ID)
-		return err
 	default:
 		return fmt.Errorf("type de valeur inconnu %d", kind)
 	}

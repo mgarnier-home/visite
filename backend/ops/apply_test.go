@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	devA = "aaaaaaaa-0000-4000-8000-000000000001" // créateur
+	devA = "aaaaaaaa-0000-4000-8000-000000000001" // premier participant
 	devB = "bbbbbbbb-0000-4000-8000-000000000002" // participant
 )
 
@@ -32,7 +32,7 @@ type env struct {
 	code string
 }
 
-// newEnv crée une visite avec la seed (3 chambres) : A créateur, B participant.
+// newEnv crée une visite avec la seed (3 chambres) : A et B participants.
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	ctx := context.Background()
@@ -54,21 +54,28 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	e := &env{t: t, s: s, db: db, code: "maison-test"}
-	e.createVisit(e.code)
+	e := &env{t: t, s: s, db: db}
+	e.code = e.createVisit("maison-test")
 	if _, err := s.Join(ctx, e.code, devB, testNow); err != nil {
 		t.Fatal(err)
 	}
 	return e
 }
 
-func (e *env) createVisit(code string) {
+// createVisit crée une annonce de 3 chambres, inscrit A et renvoie son id (le code de la visite).
+func (e *env) createVisit(name string) string {
 	e.t.Helper()
 	three := 3
-	f := model.Fiche{Address: "1 rue des Lilas", BedroomsCount: &three}
-	if err := e.s.CreateVisit(context.Background(), code, f, devA, testNow); err != nil {
-		e.t.Fatalf("CreateVisit(%s): %v", code, err)
+	l, err := e.s.CreateListing(context.Background(), model.Listing{
+		Source: "manual", URL: "https://example.test/" + name, ListingData: model.ListingData{Bedrooms: &three},
+	}, nil, testNow)
+	if err != nil {
+		e.t.Fatalf("CreateListing(%s): %v", name, err)
 	}
+	if _, err := e.s.Join(context.Background(), l.ID, devA, testNow); err != nil {
+		e.t.Fatal(err)
+	}
+	return l.ID
 }
 
 func (e *env) apply(device string, batch ...ops.Op) ([]ops.Result, int64) {
@@ -186,14 +193,14 @@ func TestDuplicateOpIgnored(t *testing.T) {
 
 func TestRejectedOpRecorded(t *testing.T) {
 	e := newEnv(t)
-	o := op("set_fiche", 100, map[string]any{"fields": map[string]any{"address": "x"}})
-	if got := e.applyOne(devB, o); got != "rejected/forbidden" {
+	o := op("set_rating", 100, map[string]any{"point_id": e.pointOfType(e.code, "note"), "value": 9})
+	if got := e.applyOne(devB, o); got != "rejected/invalid" {
 		t.Fatalf("premier envoi = %s", got)
 	}
 	if got := e.applyOne(devB, o); got != "duplicate" {
 		t.Errorf("nouvel envoi d'une opération refusée = %s, veut duplicate", got)
 	}
-	if r := e.queryString(`SELECT result FROM ops WHERE op_id = ?`, o.OpID); r != "rejected:forbidden" {
+	if r := e.queryString(`SELECT result FROM ops WHERE op_id = ?`, o.OpID); r != "rejected:invalid" {
 		t.Errorf("journal = %q", r)
 	}
 }
@@ -372,10 +379,7 @@ func TestSharedTargets(t *testing.T) {
 		{"inconnu", "area_m2", 3, "rejected/not_found"},
 		{room, "notes", "Fenêtre fissurée", "applied"},
 		{room, "notes", 3, "rejected/invalid"},
-		{e.code, "notes", "Rappeler l'agent", "applied"},
-		{e.code, "notes", "", "applied"},
-		{e.code, "notes", nil, "rejected/invalid"},
-		{e.code, "area_m2", 3, "rejected/invalid"},
+		{e.code, "notes", "x", "rejected/not_found"}, // les notes libres sont celles de l'annonce
 	}
 	for _, c := range cases {
 		got := e.applyOne(devB, op("set_shared", 100, map[string]any{"target_id": c.target, "field": c.field, "value": c.value}))
@@ -442,178 +446,13 @@ func TestRatingsArePerDevice(t *testing.T) {
 	}
 }
 
-func TestFicheOnlyCreator(t *testing.T) {
-	e := newEnv(t)
-	fields := map[string]any{"fields": map[string]any{"price_eur": 250000}}
-	if got := e.applyOne(devB, op("set_fiche", 100, fields)); got != "rejected/forbidden" {
-		t.Errorf("B : %s, veut rejected/forbidden", got)
-	}
-	if got := e.applyOne(devA, op("set_fiche", 100, fields)); got != "applied" {
-		t.Errorf("A : %s, veut applied", got)
-	}
-	if p := e.queryInt(`SELECT CAST(price_eur AS INTEGER) FROM visits WHERE code = ?`, e.code); p != 250000 {
-		t.Errorf("prix = %d", p)
-	}
-}
-
-func TestFicheFields(t *testing.T) {
-	e := newEnv(t)
-	all := map[string]any{
-		"address": "2 rue du Port", "price_eur": 300000.5, "living_area_m2": 110, "floor_area_m2": 120,
-		"land_area_m2": 500, "visit_at": "2026-10-25T14:00:00+02:00", "agent_name": "Mme X",
-		"agent_phone": "0600000000", "agent_email": "x@example.com", "construction_year": 1975,
-		"dpe_energy": "D", "dpe_ges": "E", "rooms_count": 6, "bedrooms_count": 3,
-		"listing_url": "https://example.com/annonce", "heating_type": "gaz",
-	}
-	if got := e.applyOne(devA, op("set_fiche", 100, map[string]any{"fields": all})); got != "applied" {
-		t.Fatalf("tous les champs : %s", got)
-	}
-	var got model.Fiche
-	if err := e.s.InTx(context.Background(), func(tx *store.Tx) error {
-		v, err := tx.Visit(e.code)
-		got = v.Fiche
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	gb, _ := json.Marshal(got)
-	var gm map[string]any
-	if err := json.Unmarshal(gb, &gm); err != nil {
-		t.Fatal(err)
-	}
-	wb, _ := json.Marshal(all)
-	var wm map[string]any
-	if err := json.Unmarshal(wb, &wm); err != nil {
-		t.Fatal(err)
-	}
-	for k, w := range wm {
-		if fmt.Sprint(gm[k]) != fmt.Sprint(w) {
-			t.Errorf("%s = %v, veut %v", k, gm[k], w)
-		}
-	}
-	if seqChanged, seq := e.queryInt(`SELECT seq_changed FROM visits WHERE code = ?`, e.code), e.visitSeq(); seqChanged != seq || seq != 2 {
-		t.Errorf("seq_changed = %d, seq = %d, veut 2 et 2", seqChanged, seq)
-	}
-
-	// Mise à null d'un champ facultatif.
-	if got := e.applyOne(devA, op("set_fiche", 200, map[string]any{"fields": map[string]any{"agent_name": nil}})); got != "applied" {
-		t.Fatalf("agent_name null : %s", got)
-	}
-	var name sql.NullString
-	if err := e.db.QueryRow(`SELECT agent_name FROM visits WHERE code = ?`, e.code).Scan(&name); err != nil || name.Valid {
-		t.Errorf("agent_name = %v, %v, veut NULL", name, err)
-	}
-
-	for _, bad := range []map[string]any{
-		{"inconnu": 1},
-		{"dpe_energy": "H"},
-		{"address": ""},
-		{"address": nil},
-		{"price_eur": "cher"},
-		{"bedrooms_count": 21},
-	} {
-		if got := e.applyOne(devA, op("set_fiche", 300, map[string]any{"fields": bad})); got != "rejected/invalid" {
-			t.Errorf("fiche %v : %s, veut rejected/invalid", bad, got)
-		}
-	}
-	if got := e.applyOne(devA, op("set_fiche", 300, map[string]any{})); got != "rejected/invalid" {
-		t.Errorf("fields absent : %s, veut rejected/invalid", got)
-	}
-}
-
-func TestFicheLastWriteWinsPerField(t *testing.T) {
-	e := newEnv(t)
-	e.apply(devA, op("set_fiche", 200, map[string]any{"fields": map[string]any{"heating_type": "gaz"}}))
-	before := e.visitSeq()
-	// Ancienne écriture : heating_type perd, agent_name (jamais écrit) gagne.
-	res, seq := e.apply(devA, op("set_fiche", 100, map[string]any{"fields": map[string]any{"heating_type": "fioul", "agent_name": "M. Y"}}))
-	if outcome(res[0]) != "applied" || seq != before+1 {
-		t.Fatalf("résultat %+v, seq %d (avant %d)", res, seq, before)
-	}
-	if h := e.queryString(`SELECT heating_type FROM visits WHERE code = ?`, e.code); h != "gaz" {
-		t.Errorf("heating_type = %q, veut gaz", h)
-	}
-	if n := e.queryString(`SELECT agent_name FROM visits WHERE code = ?`, e.code); n != "M. Y" {
-		t.Errorf("agent_name = %q", n)
-	}
-	// Tout perd : sans effet sur la fiche, mais seq_changed avance pour la renvoyer.
-	res, seq = e.apply(devA, op("set_fiche", 50, map[string]any{"fields": map[string]any{"heating_type": "bois"}}))
-	if outcome(res[0]) != "applied" || seq != before+2 {
-		t.Errorf("sans effet : %+v, seq %d, veut %d", res, seq, before+2)
-	}
-	if h := e.queryString(`SELECT heating_type FROM visits WHERE code = ?`, e.code); h != "gaz" {
-		t.Errorf("heating_type = %q, veut gaz", h)
-	}
-	if s := e.queryInt(`SELECT seq_changed FROM visits WHERE code = ?`, e.code); s != seq {
-		t.Errorf("seq_changed = %d, veut %d", s, seq)
-	}
-}
-
-func TestBedroomsChangeKeepsRooms(t *testing.T) {
-	e := newEnv(t)
-	count := func() int64 {
-		return e.queryInt(`SELECT COUNT(*) FROM visit_rooms WHERE visit_code = ? AND kind = 'per_bedroom'`, e.code)
-	}
-	if count() != 3 {
-		t.Fatalf("%d chambres au départ", count())
-	}
-	if got := e.applyOne(devA, op("set_fiche", 100, map[string]any{"fields": map[string]any{"bedrooms_count": 4}})); got != "applied" {
-		t.Fatalf("set_fiche : %s", got)
-	}
-	if b := e.queryInt(`SELECT bedrooms_count FROM visits WHERE code = ?`, e.code); b != 4 {
-		t.Errorf("bedrooms_count = %d, veut 4", b)
-	}
-	if c := count(); c != 3 {
-		t.Errorf("%d chambres, veut toujours 3", c)
-	}
-}
-
-func TestClosedVisitRejects(t *testing.T) {
-	e := newEnv(t)
-	if got := e.applyOne(devB, op("close_visit", 100, map[string]any{})); got != "rejected/forbidden" {
-		t.Errorf("close_visit par B avant clôture : %s, veut rejected/forbidden", got)
-	}
-	for _, bad := range []string{`[1]`, `"x"`, `3`} {
-		o := ops.Op{OpID: uuid.NewString(), Type: "close_visit", ClientTS: 100, Payload: json.RawMessage(bad)}
-		if got := e.applyOne(devA, o); got != "rejected/invalid" {
-			t.Errorf("close_visit payload %s : %s, veut rejected/invalid", bad, got)
-		}
-	}
-	res, seq := e.apply(devA, op("close_visit", 100, map[string]any{}))
-	if outcome(res[0]) != "applied" {
-		t.Fatalf("close_visit par A : %+v", res)
-	}
-	if c := e.queryString(`SELECT closed_at FROM visits WHERE code = ?`, e.code); c != "2026-10-25T10:00:00Z" {
-		t.Errorf("closed_at = %q", c)
-	}
-	if sc := e.queryInt(`SELECT seq_changed FROM visits WHERE code = ?`, e.code); sc != seq {
-		t.Errorf("seq_changed = %d, veut %d", sc, seq)
-	}
-	note := e.pointOfType(e.code, "note")
-	if got := e.applyOne(devB, op("set_rating", 200, map[string]any{"point_id": note, "value": 3})); got != "rejected/closed" {
-		t.Errorf("set_rating après clôture : %s, veut rejected/closed", got)
-	}
-	if got := e.applyOne(devB, op("close_visit", 200, map[string]any{})); got != "rejected/forbidden" {
-		t.Errorf("close_visit par B : %s, veut rejected/forbidden", got)
-	}
-	if got := e.applyOne(devA, op("close_visit", 200, map[string]any{})); got != "rejected/closed" {
-		t.Errorf("seconde clôture par A : %s, veut rejected/closed", got)
-	}
-	if got := e.applyOne(devB, op("add_room", 200, map[string]any{"id": uuid.NewString(), "name": "Cellier"})); got != "rejected/closed" {
-		t.Errorf("add_room après clôture : %s, veut rejected/closed", got)
-	}
-	if got := e.applyOne(devB, op("set_shared", 200, map[string]any{"target_id": e.code, "field": "notes", "value": "x"})); got != "rejected/closed" {
-		t.Errorf("notes de la visite après clôture : %s, veut rejected/closed", got)
-	}
-}
-
 func TestUnknownTarget(t *testing.T) {
 	e := newEnv(t)
-	e.createVisit("autre-maison")
-	otherPoint := e.pointOfType("autre-maison", "note")
-	otherRoom := e.queryString(`SELECT id FROM visit_rooms WHERE visit_code = 'autre-maison' LIMIT 1`)
+	other := e.createVisit("autre-maison")
+	otherPoint := e.pointOfType(other, "note")
+	otherRoom := e.queryString(`SELECT id FROM visit_rooms WHERE visit_code = ? LIMIT 1`, other)
 	otherQuestion := e.queryString(`SELECT q.id FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id
-		WHERE r.visit_code = 'autre-maison' LIMIT 1`)
+		WHERE r.visit_code = ? LIMIT 1`, other)
 	cases := []struct {
 		name string
 		op   ops.Op
@@ -624,7 +463,7 @@ func TestUnknownTarget(t *testing.T) {
 		{"set_shared pièce d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherRoom, "field": "area_m2", "value": 3})},
 		{"set_shared point d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherPoint, "field": "blocking", "value": true})},
 		{"set_shared question d'une autre visite", op("set_shared", 1, map[string]any{"target_id": otherQuestion, "field": "asked", "value": true})},
-		{"set_shared notes d'une autre visite", op("set_shared", 1, map[string]any{"target_id": "autre-maison", "field": "notes", "value": "x"})},
+		{"set_shared notes d'une autre visite", op("set_shared", 1, map[string]any{"target_id": other, "field": "notes", "value": "x"})},
 		{"rename_room inconnu", op("rename_room", 1, map[string]any{"room_id": uuid.NewString(), "name": "x"})},
 		{"hide_room autre visite", op("hide_room", 1, map[string]any{"room_id": otherRoom})},
 		{"add_point autre visite", op("add_point", 1, map[string]any{"id": uuid.NewString(), "room_id": otherRoom, "label": "x", "type": "note", "options": []string{}})},
@@ -806,41 +645,6 @@ func TestCommentLastWriteWins(t *testing.T) {
 	}
 	if got := e.applyOne(devB, op("set_comment", 300, map[string]any{"room_id": room, "text": ""})); got != "applied" {
 		t.Errorf("commentaire vidé : %s", got)
-	}
-}
-
-// Les notes de la visite sont partagées : un participant les modifie comme le créateur,
-// selon la même « dernière écriture gagnante ».
-func TestVisitNotes(t *testing.T) {
-	e := newEnv(t)
-	set := func(device string, ts int64, text string) string {
-		return e.applyOne(device, op("set_shared", ts, map[string]any{"target_id": e.code, "field": "notes", "value": text}))
-	}
-	if got := set(devB, 200, "de B"); got != "applied" {
-		t.Fatalf("notes par B : %s", got)
-	}
-	if got := set(devA, 100, "de A, plus ancien"); got != "applied" {
-		t.Fatalf("notes par A : %s", got)
-	}
-	if v := e.queryString(`SELECT value FROM shared_values WHERE target_id = ? AND field = 'notes'`, e.code); v != `"de B"` {
-		t.Errorf("notes = %s, veut \"de B\"", v)
-	}
-}
-
-// Un élément ajouté ne peut pas prendre le code de la visite comme id : celui-ci est la
-// cible des notes de la visite.
-func TestNewIDIsNotVisitCode(t *testing.T) {
-	e := newEnv(t)
-	room := e.roomByDir("cuisine")
-	cases := []ops.Op{
-		op("add_room", 1, map[string]any{"id": e.code, "name": "Cellier"}),
-		op("add_point", 1, map[string]any{"id": e.code, "room_id": room, "label": "x", "type": "note", "options": []string{}}),
-		op("add_question", 1, map[string]any{"id": e.code, "room_id": room, "text": "x"}),
-	}
-	for _, o := range cases {
-		if got := e.applyOne(devB, o); got != "rejected/invalid" {
-			t.Errorf("%s avec le code de la visite : %s, veut rejected/invalid", o.Type, got)
-		}
 	}
 }
 

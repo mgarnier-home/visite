@@ -20,20 +20,17 @@ type PhotoRecord struct {
 }
 
 // CheckPhotoUpload vérifie, avant d'écrire le fichier, qu'une photo d'id donné peut être
-// reçue : ErrNotFound si la visite est inconnue, ErrClosed si elle est clôturée, ErrConflict
+// reçue : ErrNotFound si la visite est inconnue, ErrConflict
 // si l'id appartient à une autre visite. exists est vrai si la photo est déjà enregistrée
 // dans cette visite (renvoi : son fichier est déjà sur le disque).
 func (s *Store) CheckPhotoUpload(ctx context.Context, code, id string) (exists bool, err error) {
-	var closedAt sql.NullString
-	err = s.db.QueryRowContext(ctx, `SELECT closed_at FROM visits WHERE code = ?`, code).Scan(&closedAt)
+	var one int
+	err = s.db.QueryRowContext(ctx, `SELECT 1 FROM visits WHERE code = ?`, code).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, ErrNotFound
 	}
 	if err != nil {
 		return false, err
-	}
-	if closedAt.Valid {
-		return false, ErrClosed
 	}
 	var existing string
 	err = s.db.QueryRowContext(ctx, `SELECT visit_code FROM photos WHERE id = ?`, id).Scan(&existing)
@@ -49,19 +46,14 @@ func (s *Store) CheckPhotoUpload(ctx context.Context, code, id string) (exists b
 }
 
 // AddPhoto enregistre la photo et incrémente le seq de la visite. Idempotent par id :
-// created est faux, sans aucun changement, si l'id existe déjà. ErrClosed si la visite
-// est clôturée, ErrNotFound si elle est inconnue ou si la pièce n'en fait pas partie.
+// created est faux, sans aucun changement, si l'id existe déjà. ErrNotFound si la visite est inconnue ou si la pièce n'en fait pas partie.
 func (s *Store) AddPhoto(ctx context.Context, p PhotoRecord) (created bool, err error) {
 	err = s.InTx(ctx, func(t *Tx) error {
-		v, err := t.Visit(p.VisitCode)
-		if err != nil {
+		if _, err := t.Visit(p.VisitCode); err != nil {
 			return err
 		}
-		if v.Closed {
-			return ErrClosed
-		}
 		var existing string
-		err = t.tx.QueryRowContext(ctx, `SELECT visit_code FROM photos WHERE id = ?`, p.ID).Scan(&existing)
+		err := t.tx.QueryRowContext(ctx, `SELECT visit_code FROM photos WHERE id = ?`, p.ID).Scan(&existing)
 		switch {
 		case err == nil:
 			if existing != p.VisitCode {

@@ -41,8 +41,8 @@ func TestOpenAppliesMigrationsOnce(t *testing.T) {
 			if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 				t.Fatal(err)
 			}
-			if n != 3 {
-				t.Fatalf("schema_migrations = %d lignes, attendu 3", n)
+			if n != 1 {
+				t.Fatalf("schema_migrations = %d lignes, attendu 1", n)
 			}
 		}
 		s.Close()

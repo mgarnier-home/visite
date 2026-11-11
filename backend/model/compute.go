@@ -42,11 +42,11 @@ func Slugify(name string) string {
 func NotaryFees(price float64) float64 { return price * 0.075 }
 
 // PricePerM2 : prix au m² habitable, nil si prix ou surface manquants.
-func PricePerM2(f Fiche) *float64 {
-	if f.PriceEUR == nil || f.LivingAreaM2 == nil || *f.LivingAreaM2 <= 0 {
+func PricePerM2(price, area *float64) *float64 {
+	if price == nil || area == nil || *area <= 0 {
 		return nil
 	}
-	v := *f.PriceEUR / *f.LivingAreaM2
+	v := *price / *area
 	return &v
 }
 

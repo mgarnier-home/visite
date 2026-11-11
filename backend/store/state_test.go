@@ -16,15 +16,28 @@ import (
 )
 
 const (
-	devA = "aaaaaaaa-0000-4000-8000-000000000001" // créateur
+	devA = "aaaaaaaa-0000-4000-8000-000000000001" // premier participant
 	devB = "bbbbbbbb-0000-4000-8000-000000000002" // participant
 )
 
 var stateNow = time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
 
-const stateCode = "maison-test"
+// stateCode : id de l'annonce (code de la visite) créée par le dernier newStateStore.
+var stateCode string
 
-// newStateStore ouvre un store temporaire avec le modèle seed et une visite (A créateur, B participant).
+// createListing crée une annonce et sa visite ; renvoie l'id.
+func createListing(t *testing.T, s *store.Store, url string, bedrooms *int) string {
+	t.Helper()
+	l, err := s.CreateListing(context.Background(), model.Listing{
+		Source: "manual", URL: url, ListingData: model.ListingData{Bedrooms: bedrooms},
+	}, nil, stateNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l.ID
+}
+
+// newStateStore ouvre un store temporaire avec le modèle seed et une visite (A et B participants).
 func newStateStore(t *testing.T) *store.Store {
 	t.Helper()
 	ctx := context.Background()
@@ -41,7 +54,8 @@ func newStateStore(t *testing.T) *store.Store {
 		t.Fatal(err)
 	}
 	three := 3
-	if err := s.CreateVisit(ctx, stateCode, model.Fiche{Address: "1 rue des Lilas", BedroomsCount: &three}, devA, stateNow); err != nil {
+	stateCode = createListing(t, s, "https://example.test/maison", &three)
+	if _, err := s.Join(ctx, stateCode, devA, stateNow); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Join(ctx, stateCode, devB, stateNow); err != nil {
@@ -120,24 +134,6 @@ func TestStateSharesSharedValues(t *testing.T) {
 	}
 }
 
-// Les notes de la visite (cible : le code) reviennent dans l'état complet et dans /changes.
-func TestStateSharesVisitNotes(t *testing.T) {
-	s := newStateStore(t)
-	before := mustState(t, s, devA, 0).Seq
-	mustApply(t, s, devB, stateOp("n1", ops.TypeSetShared, 1, map[string]any{"target_id": stateCode, "field": "notes", "value": "Rappeler l'agent"}))
-
-	for _, since := range []int64{0, before} {
-		got := mustState(t, s, devA, since)
-		if len(got.Shared) != 1 {
-			t.Fatalf("since=%d : shared = %+v", since, got.Shared)
-		}
-		sv := got.Shared[0]
-		if sv.TargetID != stateCode || sv.Field != "notes" || sv.Value != "Rappeler l'agent" || sv.Author != 2 {
-			t.Errorf("since=%d : shared = %+v", since, sv)
-		}
-	}
-}
-
 // L'état indique pour chaque point et chaque question s'il est important.
 func TestStateImportance(t *testing.T) {
 	s := newStateStore(t)
@@ -199,16 +195,6 @@ func TestStateSinceCurrentSeqIsEmpty(t *testing.T) {
 		if !strings.Contains(string(b), f) {
 			t.Errorf("%s attendu dans %s", f, b)
 		}
-	}
-}
-
-func TestStateIsCreatorFlag(t *testing.T) {
-	s := newStateStore(t)
-	if !mustState(t, s, devA, 0).Visit.IsCreator {
-		t.Error("A est créateur")
-	}
-	if mustState(t, s, devB, 0).Visit.IsCreator {
-		t.Error("B n'est pas créateur")
 	}
 }
 
@@ -294,24 +280,17 @@ func TestAddPhotoErrors(t *testing.T) {
 		t.Errorf("visite inconnue : %v", err)
 	}
 	// Pièce d'une autre visite.
-	if err := s.CreateVisit(ctx, "autre-visite", model.Fiche{Address: "x"}, devA, stateNow); err != nil {
+	otherID := createListing(t, s, "https://example.test/autre", nil)
+	if _, err := s.Join(ctx, otherID, devA, stateNow); err != nil {
 		t.Fatal(err)
 	}
-	other, err := s.State(ctx, "autre-visite", devA, 0)
+	other, err := s.State(ctx, otherID, devA, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	foreign := other.Rooms[0].ID
 	if _, err := s.AddPhoto(ctx, photoRec("p3", &foreign, devA)); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("pièce d'une autre visite : %v", err)
-	}
-}
-
-func TestAddPhotoClosedVisit(t *testing.T) {
-	s := newStateStore(t)
-	mustApply(t, s, devA, stateOp("c1", ops.TypeCloseVisit, 1, map[string]any{}))
-	if _, err := s.AddPhoto(context.Background(), photoRec("p1", nil, devA)); !errors.Is(err, store.ErrClosed) {
-		t.Errorf("visite clôturée : %v", err)
 	}
 }
 
@@ -360,8 +339,8 @@ func TestStateListsPhotos(t *testing.T) {
 func TestStateIsolatedBetweenVisits(t *testing.T) {
 	s := newStateStore(t)
 	ctx := context.Background()
-	const code2 = "maison-autre"
-	if err := s.CreateVisit(ctx, code2, model.Fiche{Address: "2 rue B"}, devC, stateNow); err != nil {
+	code2 := createListing(t, s, "https://example.test/maison-autre", nil)
+	if _, err := s.Join(ctx, code2, devC, stateNow); err != nil {
 		t.Fatal(err)
 	}
 	st2, err := s.State(ctx, code2, devC, 0)
@@ -372,9 +351,8 @@ func TestStateIsolatedBetweenVisits(t *testing.T) {
 	b := []ops.Op{
 		stateOp("x1", ops.TypeSetShared, 1, map[string]any{"target_id": q2, "field": "answer", "value": "secret visite 2"}),
 		stateOp("x2", ops.TypeSetRating, 1, map[string]any{"point_id": pt2, "value": 1}),
-		stateOp("x3", ops.TypeSetShared, 1, map[string]any{"target_id": code2, "field": "notes", "value": "secret visite 2"}),
 	}
-	if res, _, err := ops.ApplyBatch(ctx, s, code2, devC, b, stateNow); err != nil || res[0].Result != ops.ResultApplied || res[1].Result != ops.ResultApplied || res[2].Result != ops.ResultApplied {
+	if res, _, err := ops.ApplyBatch(ctx, s, code2, devC, b, stateNow); err != nil || res[0].Result != ops.ResultApplied || res[1].Result != ops.ResultApplied {
 		t.Fatalf("lot visite 2 : %+v %v", res, err)
 	}
 	rec := photoRec("ph-v2", &room2, devC)

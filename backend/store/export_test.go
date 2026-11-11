@@ -15,8 +15,7 @@ func TestExportDataByParticipant(t *testing.T) {
 	mustApply(t, s, devA,
 		stateOp("a1", ops.TypeSetRating, 1, map[string]any{"point_id": pt, "value": 5}),
 		stateOp("a2", ops.TypeSetComment, 1, map[string]any{"room_id": room, "text": "texte de A"}),
-		stateOp("a3", ops.TypeSetShared, 1, map[string]any{"target_id": q, "field": "answer", "value": "oui"}),
-		stateOp("a4", ops.TypeSetShared, 1, map[string]any{"target_id": stateCode, "field": "notes", "value": "notes de la visite"}))
+		stateOp("a3", ops.TypeSetShared, 1, map[string]any{"target_id": q, "field": "answer", "value": "oui"}))
 	mustApply(t, s, devB,
 		stateOp("b1", ops.TypeSetRating, 2, map[string]any{"point_id": pt, "value": nil}),
 		stateOp("b2", ops.TypeSetComment, 2, map[string]any{"room_id": room, "text": "texte de B"}))
@@ -25,8 +24,8 @@ func TestExportDataByParticipant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Participants != 2 || d.Year != 0 || d.Fiche.Address != "1 rue des Lilas" {
-		t.Errorf("données générales = %d %d %q", d.Participants, d.Year, d.Fiche.Address)
+	if d.Participants != 2 || d.Year != 0 || d.Listing.ID != stateCode || d.Listing.Bedrooms == nil || *d.Listing.Bedrooms != 3 {
+		t.Errorf("données générales = %d %d %q", d.Participants, d.Year, d.Listing.ID)
 	}
 	if len(d.Rooms) != len(st.Rooms) || len(d.Points) != len(st.Points) || len(d.Questions) != len(st.Questions) {
 		t.Errorf("structure incomplète : %d/%d/%d", len(d.Rooms), len(d.Points), len(d.Questions))
@@ -42,9 +41,6 @@ func TestExportDataByParticipant(t *testing.T) {
 	}
 	if string(d.Shared[q]["answer"]) != `"oui"` {
 		t.Errorf("shared = %s", d.Shared[q]["answer"])
-	}
-	if string(d.Shared[stateCode]["notes"]) != `"notes de la visite"` {
-		t.Errorf("notes de la visite = %s", d.Shared[stateCode]["notes"])
 	}
 }
 
