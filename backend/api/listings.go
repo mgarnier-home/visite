@@ -49,6 +49,8 @@ func (h *handlers) createListing(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &body) {
 		return
 	}
+	// Le téléchargement des photos peut dépasser les 60 s d'écriture du serveur : on lève cette limite ici.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	l, err := h.listings.Create(r.Context(), body.Text)
 	var dup listings.DuplicateError
 	switch {

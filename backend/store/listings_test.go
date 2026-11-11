@@ -288,3 +288,43 @@ func TestUpdateListingStatus(t *testing.T) {
 		t.Fatalf("inconnu : %v", err)
 	}
 }
+
+func TestSetFetchFailureRemovedKeepsFirstDateAndClearsError(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	l, err := s.CreateListing(ctx, sampleListing("https://example.test/r", 0), nil, testNow) // fetch_error non vide
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := testNow.Add(time.Hour)
+	if err := s.SetFetchFailure(ctx, l.ID, true, "", first); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetFetchFailure(ctx, l.ID, true, "", first.Add(48*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetListing(ctx, l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RemovedAt == nil || *got.RemovedAt != first.UTC().Format(time.RFC3339) {
+		t.Errorf("removed_at = %v, veut la première date", got.RemovedAt)
+	}
+	if got.FetchError != "" {
+		t.Errorf("fetch_error = %q, veut vide", got.FetchError)
+	}
+}
+
+func TestOpenRefusesUnknownMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v1.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
+	mustExec(t, db, `INSERT INTO schema_migrations (name) VALUES ('002_question_important.sql')`)
+	db.Close()
+	if _, err := Open(path); !errors.Is(err, ErrV1Database) {
+		t.Fatalf("err = %v, veut ErrV1Database", err)
+	}
+}

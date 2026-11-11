@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mgarnier-home/visite/model"
 	"github.com/mgarnier-home/visite/photos"
@@ -342,5 +343,17 @@ func TestRefreshCancelledFetchKeepsData(t *testing.T) {
 	got, _ := e.svc.Store.GetListing(context.Background(), l.ID)
 	if got.FetchError != "" {
 		t.Errorf("fetch_error = %q", got.FetchError)
+	}
+}
+
+func TestCreateManualTruncatesTitle(t *testing.T) {
+	e := newEnv(t)
+	l, err := e.svc.Create(context.Background(),
+		strings.Repeat("é", 500)+" https://www.leboncoin.fr/ad/ventes_immobilieres/3306963411")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := utf8.RuneCountInString(l.Title); n != 200 {
+		t.Errorf("titre de %d runes, voulu 200", n)
 	}
 }

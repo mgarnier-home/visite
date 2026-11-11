@@ -36,6 +36,9 @@ var rawLinkRe = regexp.MustCompile(`https://\S+`)
 
 const maxPhoto = 15 << 20
 
+// maxManualTitle borne le titre d'une annonce manuelle (en runes).
+const maxManualTitle = 200
+
 var extensions = map[string]string{
 	"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
 }
@@ -67,6 +70,9 @@ func (s *Service) Create(ctx context.Context, text string) (model.Listing, error
 	var res scrape.Result
 	if source == scrape.SourceManual {
 		l.Title = strings.Join(strings.Fields(rawLinkRe.ReplaceAllString(text, "")), " ")
+		if r := []rune(l.Title); len(r) > maxManualTitle {
+			l.Title = string(r[:maxManualTitle])
+		}
 	} else {
 		var err error
 		if res, err = s.Fetcher.Fetch(ctx, source, url); err != nil {

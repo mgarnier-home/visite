@@ -53,20 +53,28 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// refuseV1 refuse une base qui a appliqué la dernière migration de la v1.
+// refuseV1 refuse une base dont schema_migrations contient une migration inconnue de la v2.
 func (s *Store) refuseV1() error {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'schema_migrations'`).Scan(&n)
 	if err != nil || n == 0 {
 		return err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '003_important.sql'`).Scan(&n); err != nil {
+	rows, err := s.db.Query(`SELECT name FROM schema_migrations`)
+	if err != nil {
 		return err
 	}
-	if n > 0 {
-		return ErrV1Database
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if _, err := migrationsFS.ReadFile("migrations/" + name); err != nil {
+			return ErrV1Database
+		}
 	}
-	return nil
+	return rows.Err()
 }
 
 func (s *Store) migrate() error {

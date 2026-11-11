@@ -378,7 +378,7 @@ func (s *Store) SetFetchFailure(ctx context.Context, id string, removed bool, ms
 	var res sql.Result
 	var err error
 	if removed {
-		res, err = s.db.ExecContext(ctx, `UPDATE listings SET removed_at=? WHERE id=?`, now.UTC().Format(time.RFC3339), id)
+		res, err = s.db.ExecContext(ctx, `UPDATE listings SET removed_at=COALESCE(removed_at, ?), fetch_error='' WHERE id=?`, now.UTC().Format(time.RFC3339), id)
 	} else {
 		res, err = s.db.ExecContext(ctx, `UPDATE listings SET fetch_error=? WHERE id=?`, msg, id)
 	}
