@@ -1,8 +1,12 @@
 import type { TemplatePage } from './features/template/template.page';
 import { Routes } from '@angular/router';
 
-// Pas de route '' avant la page d'accueil (tâche 9).
 export const routes: Routes = [
+  {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/listings/listings.page').then((m) => m.ListingsPage),
+  },
   {
     path: 'modele',
     loadComponent: () => import('./features/template/template.page').then((m) => m.TemplatePage),
