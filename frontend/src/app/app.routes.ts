@@ -13,6 +13,14 @@ export const routes: Routes = [
     canDeactivate: [(page: TemplatePage) => page.canLeave()],
   },
   {
+    path: 'annonces/nouvelle',
+    loadComponent: () => import('./features/listings/add.page').then((m) => m.AddPage),
+  },
+  {
+    path: 'annonces/:id/verifier',
+    loadComponent: () => import('./features/listings/edit.page').then((m) => m.EditPage),
+  },
+  {
     path: 'annonces/:id',
     loadComponent: () => import('./features/visit/visit-shell.page').then((m) => m.VisitShellPage),
     children: [

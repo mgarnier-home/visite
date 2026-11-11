@@ -48,3 +48,19 @@ export function nextStepLine(l: Listing, now: Date): string {
   if (l.status === 'done' && l.visited_at) return `Visitée le ${day(l.visited_at, now)}`;
   return `Ajoutée le ${day(l.created_at, now)}`;
 }
+
+const hostIs = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
+
+/** Source d'un texte partagé : même règle que `scrape.FindURL` côté serveur ; `null` sans lien https. */
+export function detectSource(text: string): ListingSource | null {
+  const raw = text.match(/https:\/\/\S+/)?.[0].replace(/[.,;:!?)\]>"']+$/, '');
+  if (!raw) return null;
+  let host: string;
+  try {
+    host = new URL(raw).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  return hostIs(host, 'bienici.com') ? 'bienici' : hostIs(host, 'jinka.fr') ? 'jinka' : 'manual';
+}
