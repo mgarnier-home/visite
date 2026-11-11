@@ -7,11 +7,11 @@ import { SyncService } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
 import { QuestionsTabComponent } from './questions-tab.component';
 
-function makeState(closed = false): VisitState {
+function makeState(): VisitState {
   return {
     seq: 1,
     me: { number: 1 },
-    visit: { code: 'maison-x', closed_at: closed ? 'x' : null, fiche: { address: 'x' } },
+    visit: { code: 'maison-x' },
     rooms: [
       { id: 'r2', name: 'Cuisine', dir_name: 'cuisine', kind: 'room', position: 2, hidden: false },
       { id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false },
@@ -134,11 +134,5 @@ describe('QuestionsTabComponent', () => {
     await fixture.whenStable();
     expect(sync.dispatch).toHaveBeenCalledWith('set_shared', { target_id: 'q3', field: 'answer', value: 'Oui' });
     fixture.destroy();
-  });
-
-  it('visite clôturée : cases et réponses désactivées', () => {
-    const { el } = setup(makeState(true));
-    expect(el.querySelector<HTMLInputElement>('[data-test=asked] input')?.disabled).toBe(true);
-    expect(el.querySelector<HTMLTextAreaElement>('[data-test=answer]')?.disabled).toBe(true);
   });
 });

@@ -5,16 +5,16 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
-import { VisitState } from '../../core/api.types';
-import { LocalStore } from '../../core/local-store';
+import { Listing, VisitState } from '../../core/api.types';
+import { CurrentListing } from '../../core/current-listing';
 import { SyncService, SyncStatus } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
 import { VisitShellPage } from './visit-shell.page';
 
-const stateOf = (address: string, closed = false) =>
+const stateOf = () =>
   ({
     seq: 1,
-    visit: { code: 'maison-x', closed_at: closed ? 'x' : null, fiche: { address } },
+    visit: { code: 'maison-x' },
     rooms: [{ id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false }],
     questions: [
       { id: 'q1', room_id: 'r1', text: 'a', position: 1 },
@@ -23,31 +23,33 @@ const stateOf = (address: string, closed = false) =>
     shared: [{ target_id: 'q2', field: 'asked', value: true, updated_at: 1, author: 1 }],
   }) as unknown as VisitState;
 
+const listingOf = (over: Partial<Listing> = {}) =>
+  ({ id: 'maison-x', title: '', property_type: 'Maison', city: 'Lyon', price_eur: 250000, ...over }) as Listing;
+
 describe('VisitShellPage', () => {
   const state = signal<VisitState | null>(null);
-  const status = signal<SyncStatus>({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
+  const status = signal<SyncStatus>({ sending: false, error: null });
   let notices: Subject<string>;
   const sync = { state, status, open: vi.fn(), close: vi.fn(), notices$: undefined as unknown };
-  const api = { join: vi.fn(), state: vi.fn() };
-  const store = { getState: vi.fn(), saveState: vi.fn() };
+  const api = { getListing: vi.fn(), join: vi.fn() };
   const snack = { open: vi.fn() };
   let params: BehaviorSubject<ParamMap>;
 
   beforeEach(() => {
     vi.resetAllMocks();
     notices = new Subject<string>();
-    params = new BehaviorSubject(convertToParamMap({ code: 'maison-x' }));
+    params = new BehaviorSubject(convertToParamMap({ id: 'maison-x' }));
     sync.notices$ = notices.asObservable();
-    state.set(stateOf('12 rue des Lilas'));
-    status.set({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
+    state.set(stateOf());
+    status.set({ sending: false, error: null });
     sync.open.mockResolvedValue(undefined);
-    store.getState.mockResolvedValue(stateOf('12 rue des Lilas'));
+    api.getListing.mockResolvedValue(listingOf());
+    api.join.mockResolvedValue({ number: 1 });
     TestBed.configureTestingModule({
       imports: [VisitShellPage],
       providers: [
         { provide: SyncService, useValue: sync },
         { provide: ApiClient, useValue: api },
-        { provide: LocalStore, useValue: store },
         { provide: MatSnackBar, useValue: snack },
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: params } },
@@ -59,7 +61,7 @@ describe('VisitShellPage', () => {
   async function setup() {
     const fixture = TestBed.createComponent(VisitShellPage);
     fixture.detectChanges();
-    // ngOnInit est asynchrone et le framework ne l'attend pas
+    // l'ouverture est asynchrone et le framework ne l'attend pas
     await new Promise((r) => setTimeout(r));
     await fixture.whenStable();
     fixture.detectChanges();
@@ -67,16 +69,25 @@ describe('VisitShellPage', () => {
   }
   const text = (el: HTMLElement, sel: string) => el.querySelector(sel)?.textContent?.trim();
 
-  it('ouvre la synchronisation, affiche l\'adresse et les quatre onglets, ferme à la destruction', async () => {
+  it('charge l\'annonce, rejoint, ouvre la synchronisation, affiche trois onglets, ferme à la destruction', async () => {
     const { fixture, el } = await setup();
+    expect(api.getListing).toHaveBeenCalledWith('maison-x');
+    expect(api.join).toHaveBeenCalledWith('maison-x');
     expect(sync.open).toHaveBeenCalledWith('maison-x');
-    expect(api.join).not.toHaveBeenCalled();
-    expect(text(el, '[data-test=title]')).toBe('12 rue des Lilas');
+    expect(TestBed.inject(CurrentListing).listing()?.price_eur).toBe(250000);
+    expect(text(el, '[data-test=title]')).toBe('Maison · Lyon');
     expect(Array.from(el.querySelectorAll('a[mat-tab-link]')).map((a) => a.textContent?.replace(/\d+$/, '').trim())).toEqual([
-      'Pièces', 'Questions', 'Fiche', 'Bilan',
+      'Pièces', 'Questions', 'Bilan',
     ]);
     fixture.destroy();
     expect(sync.close).toHaveBeenCalled();
+    expect(TestBed.inject(CurrentListing).listing()).toBeNull();
+  });
+
+  it('le titre de l\'annonce prime sur « type · ville »', async () => {
+    api.getListing.mockResolvedValue(listingOf({ title: 'Belle maison' }));
+    const { el } = await setup();
+    expect(text(el, '[data-test=title]')).toBe('Belle maison');
   });
 
   it('badge des questions non posées sur l\'onglet Questions, masqué à 0', async () => {
@@ -84,107 +95,71 @@ describe('VisitShellPage', () => {
     const badge = () => el.querySelectorAll('a[mat-tab-link]')[1].querySelector('.mat-badge-content');
     expect(badge()?.textContent?.trim()).toBe('1');
     expect(el.querySelectorAll('a[mat-tab-link]')[0].querySelector('.mat-badge-content')).toBeNull();
-    state.set({ ...stateOf('x'), shared: [] , questions: [] } as unknown as VisitState);
+    state.set({ ...stateOf(), shared: [] , questions: [] } as unknown as VisitState);
     fixture.detectChanges();
     const b = badge();
     expect(!b || b.closest('.mat-badge-hidden') !== null || b.parentElement?.classList.contains('mat-badge-hidden')).toBe(true);
   });
 
-  it('affiche le code quand l\'adresse est vide', async () => {
-    state.set(stateOf(''));
+  it('réseau absent : message et lien vers l\'accueil', async () => {
+    api.getListing.mockRejectedValue(new ApiError(0, 'réseau'));
     const { el } = await setup();
-    expect(text(el, '[data-test=title]')).toBe('maison-x');
-  });
-
-  it('première ouverture : rejoint, récupère et enregistre l\'état avant d\'ouvrir', async () => {
-    store.getState.mockResolvedValue(undefined);
-    const full = stateOf('x');
-    api.join.mockResolvedValue({ number: 2 });
-    api.state.mockResolvedValue(full);
-    await setup();
-    expect(api.join).toHaveBeenCalledWith('maison-x');
-    expect(store.saveState).toHaveBeenCalledWith('maison-x', full);
-    expect(sync.open).toHaveBeenCalledWith('maison-x');
-  });
-
-  it('première ouverture hors ligne : message et lien vers l\'accueil', async () => {
-    store.getState.mockResolvedValue(undefined);
-    api.join.mockRejectedValue(new ApiError(0, 'réseau'));
-    const { el } = await setup();
-    expect(el.textContent).toContain('Il faut du réseau pour ouvrir cette visite la première fois');
+    expect(el.textContent).toContain('Il faut du réseau pour ouvrir cette visite');
     expect(el.querySelector('a[href="/"]')).not.toBeNull();
     expect(sync.open).not.toHaveBeenCalled();
   });
 
-  it('code inconnu (404) : « Aucune visite avec ce code »', async () => {
-    store.getState.mockResolvedValue(undefined);
-    api.join.mockRejectedValue(new ApiError(404, 'not found'));
+  it('annonce inconnue (404) : message dédié', async () => {
+    api.getListing.mockRejectedValue(new ApiError(404, 'not found'));
     const { el } = await setup();
-    expect(el.textContent).toContain('Aucune visite avec ce code');
+    expect(el.textContent).toContain('Aucune annonce avec cet identifiant');
   });
 
   it('affiche les notices de synchronisation dans un snackbar, jusqu\'à la destruction', async () => {
     const { fixture } = await setup();
-    notices.next('Une modification a été refusée (visite clôturée)');
-    expect(snack.open).toHaveBeenCalledWith('Une modification a été refusée (visite clôturée)', 'OK', expect.anything());
+    notices.next('Modification non enregistrée : boum');
+    expect(snack.open).toHaveBeenCalledWith('Modification non enregistrée : boum', 'OK', expect.anything());
     fixture.destroy();
     notices.next('autre');
     expect(snack.open).toHaveBeenCalledTimes(1);
   });
 
-  it('visite clôturée : bandeau avec cadenas', async () => {
-    state.set(stateOf('x', true));
-    const { el } = await setup();
-    expect(text(el, '[data-test=closed-banner]')).toContain('Visite clôturée');
-  });
-
-  it('rouvre la visite quand le code change et ignore le résultat périmé de l\'ancien code', async () => {
-    store.getState.mockResolvedValue(undefined);
-    let resolveA!: (v: { number: number }) => void;
-    api.join.mockImplementation((c: string) =>
-      c === 'a' ? new Promise((r) => (resolveA = r)) : Promise.resolve({ number: 2 }),
+  it('rouvre la visite quand l\'id change et ignore le résultat périmé de l\'ancien', async () => {
+    let resolveA!: (v: Listing) => void;
+    api.getListing.mockImplementation((id: string) =>
+      id === 'a' ? new Promise((r) => (resolveA = r)) : Promise.resolve(listingOf({ id })),
     );
-    api.state.mockResolvedValue(stateOf('b'));
-    params.next(convertToParamMap({ code: 'a' }));
+    params.next(convertToParamMap({ id: 'a' }));
     const fixture = TestBed.createComponent(VisitShellPage);
     fixture.detectChanges();
     await new Promise((r) => setTimeout(r));
-    params.next(convertToParamMap({ code: 'b' }));
+    params.next(convertToParamMap({ id: 'b' }));
     await new Promise((r) => setTimeout(r));
-    resolveA({ number: 1 });
+    resolveA(listingOf({ id: 'a' }));
     await new Promise((r) => setTimeout(r));
     await fixture.whenStable();
     fixture.detectChanges();
     expect(sync.open).toHaveBeenCalledTimes(1);
     expect(sync.open).toHaveBeenCalledWith('b');
-    expect(store.saveState).toHaveBeenCalledTimes(1);
-    expect(store.saveState.mock.calls[0][0]).toBe('b');
+    expect(TestBed.inject(CurrentListing).listing()?.id).toBe('b');
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('a[mat-tab-link]')?.getAttribute('href')).toBe('/v/b/rooms');
+    expect(el.querySelector('a[mat-tab-link]')?.getAttribute('href')).toBe('/annonces/b/pieces');
   });
 
   describe('indicateur de synchronisation', () => {
-    it('Synchronisé quand rien n\'est en attente', async () => {
-      const { el } = await setup();
+    it('Synchronisé au repos, Envoi… pendant un envoi', async () => {
+      const { fixture, el } = await setup();
       expect(text(el, '[data-test=sync-label]')).toBe('Synchronisé');
+      status.set({ sending: true, error: null });
+      fixture.detectChanges();
+      expect(text(el, '[data-test=sync-label]')).toBe('Envoi…');
     });
 
-    it('accorde les pluriels des éléments en attente', async () => {
+    it('affiche l\'erreur de mise à jour', async () => {
       const { fixture, el } = await setup();
-      status.set({ online: true, pendingOps: 1, pendingPhotos: 1, error: null });
+      status.set({ sending: false, error: 'Mise à jour impossible : x' });
       fixture.detectChanges();
-      expect(text(el, '[data-test=sync-label]')).toBe('1 modification et 1 photo en attente');
-      status.set({ online: true, pendingOps: 3, pendingPhotos: 2, error: null });
-      fixture.detectChanges();
-      expect(text(el, '[data-test=sync-label]')).toBe('3 modifications et 2 photos en attente');
-    });
-
-    it('Hors ligne, et l\'erreur est affichée dessous', async () => {
-      const { fixture, el } = await setup();
-      status.set({ online: false, pendingOps: 0, pendingPhotos: 0, error: 'Serveur injoignable' });
-      fixture.detectChanges();
-      expect(text(el, '[data-test=sync-label]')).toBe('Hors ligne');
-      expect(text(el, '[data-test=sync-error]')).toBe('Serveur injoignable');
+      expect(text(el, '[data-test=sync-error]')).toBe('Mise à jour impossible : x');
     });
   });
 });

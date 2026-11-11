@@ -4,7 +4,7 @@
       <button mat-icon-button type="button" data-test="prev" aria-label="Pièce précédente" [disabled]="!hasPrev()" (click)="goPrev()">
         <mat-icon svgIcon="chevron_left" />
       </button>
-      <a mat-button [routerLink]="['/v', code(), 'rooms']" data-test="back">
+      <a mat-button [routerLink]="['/annonces', code(), 'pieces']" data-test="back">
         <mat-icon svgIcon="arrow_back" />
         Pièces
       </a>
@@ -33,7 +33,7 @@
         </button>
       } @else {
         <h2 data-test="room-name">{{ r.name }}</h2>
-        <button mat-icon-button type="button" data-test="rename" aria-label="Renommer la pièce" [disabled]="closed()" (click)="startRename()">
+        <button mat-icon-button type="button" data-test="rename" aria-label="Renommer la pièce" (click)="startRename()">
           <mat-icon svgIcon="edit" />
         </button>
       }
@@ -46,7 +46,7 @@
           <span class="author" data-test="room-notes-author">P{{ notes().author }}</span>
         }
       </span>
-      <textarea data-test="room-notes" rows="3" [value]="shown(roomKey('notes'), notes().text)" [disabled]="closed()"
+      <textarea data-test="room-notes" rows="3" [value]="shown(roomKey('notes'), notes().text)"
         (input)="onInput(roomKey('notes'), $event)" (blur)="onBlur(roomKey('notes'), $event)"></textarea>
     </label>
 
@@ -56,7 +56,6 @@
         [myRating]="p.rating"
         [shared]="p.shared"
         [authors]="p.authors"
-        [disabled]="closed()"
         (rate)="rate(p.point.id, $event)"
         (setValue)="setShared(p.point.id, 'value', $event)"
         (setBlocking)="setShared(p.point.id, 'blocking', $event)"
@@ -68,7 +67,6 @@
         <mat-checkbox
           data-test="asked"
           [checked]="q.asked"
-          [disabled]="closed()"
           (change)="setAsked(q.question.id, $event.checked)"
         >{{ q.question.text }} <span class="hint">(posée)</span></mat-checkbox>
         <textarea
@@ -77,7 +75,6 @@
           aria-label="Réponse"
           placeholder="Réponse"
           [value]="shown(answerKey(q.question.id), q.answer)"
-          [disabled]="closed()"
           (input)="onInput(answerKey(q.question.id), $event)"
           (blur)="onBlur(answerKey(q.question.id), $event)"
         ></textarea>
@@ -135,7 +132,6 @@
           appNumeric="decimal"
           data-test="area"
           [value]="shown(roomKey('area'), formatNumeric(area()))"
-          [disabled]="closed()"
           (input)="onInput(roomKey('area'), $event)"
           (blur)="onBlur(roomKey('area'), $event)"
         />
@@ -144,7 +140,7 @@
 
     <label class="field">
       <span>Mon commentaire (privé)</span>
-      <textarea data-test="comment" rows="3" [value]="shown(roomKey('comment'), comment())" [disabled]="closed()"
+      <textarea data-test="comment" rows="3" [value]="shown(roomKey('comment'), comment())"
         (input)="onInput(roomKey('comment'), $event)" (blur)="onBlur(roomKey('comment'), $event)"></textarea>
     </label>
 
@@ -153,21 +149,21 @@
       @for (ph of photos(); track ph.id) {
         <img class="thumb" data-test="thumb" alt="Photo de la pièce" loading="lazy" [src]="ph.src" />
       }
-      <app-photo-button [disabled]="closed()" (photo)="addPhoto($event)" (failed)="photoFailed($event)">
+      <app-photo-button (photo)="addPhoto($event)" (failed)="photoFailed($event)">
         Photo
       </app-photo-button>
     </div>
 
     <div class="actions">
-      <button mat-flat-button type="button" data-test="add-point" [disabled]="closed()" (click)="addPoint()">
+      <button mat-flat-button type="button" data-test="add-point" (click)="addPoint()">
         <mat-icon svgIcon="add" />
         Point
       </button>
-      <button mat-flat-button type="button" data-test="add-question" [disabled]="closed()" (click)="addQuestion()">
+      <button mat-flat-button type="button" data-test="add-question" (click)="addQuestion()">
         <mat-icon svgIcon="add" />
         Question
       </button>
-      <button mat-stroked-button type="button" data-test="hide" [disabled]="closed()" (click)="hideRoom()">
+      <button mat-stroked-button type="button" data-test="hide" (click)="hideRoom()">
         <mat-icon svgIcon="visibility_off" />
         Masquer la pièce
       </button>
@@ -176,6 +172,6 @@
 } @else {
   <section class="room" data-test="not-found">
     <p>Pièce introuvable</p>
-    <a mat-stroked-button [routerLink]="['/v', code(), 'rooms']">Retour aux pièces</a>
+    <a mat-stroked-button [routerLink]="['/annonces', code(), 'pieces']">Retour aux pièces</a>
   </section>
 }

@@ -1,16 +1,11 @@
-import { Fiche, Point, Rating, Room, SharedValue, VisitState } from './api.types';
+import { Listing, Point, Rating, Room, SharedValue, VisitState } from './api.types';
 import {
   blockingPoints, buildingAge, notaryFees, pricePerM2, realPrice, totalWorks, unaskedCount,
   weightedScore,
 } from './compute';
 
-function fiche(p: Partial<Fiche> = {}): Fiche {
-  return {
-    address: '', price_eur: null, living_area_m2: null, floor_area_m2: null, land_area_m2: null,
-    visit_at: null, agent_name: null, agent_phone: null, agent_email: null,
-    construction_year: null, dpe_energy: null, dpe_ges: null, rooms_count: null,
-    bedrooms_count: null, listing_url: null, heating_type: null, ...p,
-  };
+function fiche(p: Partial<Listing> = {}): Listing {
+  return { price_eur: null, living_area_m2: null, construction_year: null, ...p } as Listing;
 }
 function room(id: string, position: number, o: Partial<Room> = {}): Room {
   return { id, name: id, dir_name: id, kind: 'room', position, hidden: false, ...o };
@@ -24,12 +19,11 @@ function shared(target_id: string, field: SharedValue['field'], value: unknown):
 function rating(point_id: string, value: number | null): Rating {
   return { point_id, value, updated_at: 1 };
 }
-function state(o: Partial<VisitState> = {}, f: Partial<Fiche> = {}): VisitState {
+function state(o: Partial<VisitState> = {}): VisitState {
   return {
     seq: 0, me: { number: 1 },
     visit: {
-      code: 'abc', is_creator: true, created_at: '', closed_at: null, fiche: fiche(f),
-      packing_list: '', participants: 1,
+      code: 'abc', created_at: '', packing_list: '', participants: 1,
     },
     rooms: [], points: [], questions: [], shared: [], ratings: [], comments: [], photos: [], ...o,
   };
@@ -77,11 +71,13 @@ describe('totalWorks / realPrice', () => {
     expect(totalWorks(s)).toBe(0);
   });
   it('realPrice = prix + frais de notaire + travaux', () => {
-    const s = state({ rooms, points, shared: sh.slice(0, 3) }, { price_eur: 300000 });
-    expect(realPrice(s)).toBeCloseTo(323700, 6);
+    const s = state({ rooms, points, shared: sh.slice(0, 3) });
+    expect(realPrice(s, fiche({ price_eur: 300000 }))).toBeCloseTo(323700, 6);
   });
   it('realPrice est null sans prix', () => {
-    expect(realPrice(state({ rooms, points, shared: sh.slice(0, 3) }))).toBeNull();
+    const s = state({ rooms, points, shared: sh.slice(0, 3) });
+    expect(realPrice(s, fiche())).toBeNull();
+    expect(realPrice(s, null)).toBeNull();
   });
 });
 

@@ -6,7 +6,6 @@
         [myRating]="p.rating"
         [shared]="p.shared"
         [authors]="p.authors"
-        [disabled]="closed()"
         [showWeight]="true"
         (rate)="rate(p.point.id, $event)"
         (setValue)="setShared(p.point.id, 'value', $event)"
@@ -45,7 +44,7 @@
       <mat-icon svgIcon="warning" />
       <span>
         {{ unasked() }} {{ unasked() > 1 ? 'questions non posées' : 'question non posée' }}
-        <a [routerLink]="['/v', code(), 'questions']">Voir</a>
+        <a [routerLink]="['/annonces', code(), 'questions']">Voir</a>
       </span>
     </div>
   }
@@ -59,11 +58,5 @@
       <mat-icon svgIcon="content_copy" />
       Copier pour Sheets
     </button>
-    @if (isCreator()) {
-      <button mat-stroked-button type="button" data-test="close" [disabled]="closed()" (click)="closeVisit()">
-        <mat-icon svgIcon="lock" />
-        Clôturer la visite
-      </button>
-    }
   </div>
 </section>

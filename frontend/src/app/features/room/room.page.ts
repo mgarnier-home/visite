@@ -11,7 +11,6 @@ import { firstValueFrom, map } from 'rxjs';
 import { ApiClient } from '../../core/api.client';
 import { OpType, SharedField } from '../../core/api.types';
 import { getDeviceId } from '../../core/device-id';
-import { LocalStore } from '../../core/local-store';
 import { onPageHidden } from '../../core/page-hidden';
 import { SyncService } from '../../core/sync.service';
 import { NumericDirective, formatNumeric, parseNumeric } from '../../shared/numeric.directive';
@@ -46,7 +45,6 @@ type AuthorMap = Partial<Record<SharedField, number>>;
 export class RoomPage {
   private readonly sync = inject(SyncService);
   private readonly api = inject(ApiClient);
-  private readonly store = inject(LocalStore);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly router = inject(Router);
@@ -56,12 +54,11 @@ export class RoomPage {
   // la page est réutilisée quand seule la pièce change : on lit les paramètres de façon réactive
   protected readonly roomId = toSignal(this.route.paramMap.pipe(map((p) => p.get('roomId') ?? '')), { initialValue: '' });
   private readonly parentCode = toSignal(
-    (this.route.parent ?? this.route).paramMap.pipe(map((p) => p.get('code') ?? '')),
+    (this.route.parent ?? this.route).paramMap.pipe(map((p) => p.get('id') ?? '')),
     { initialValue: '' },
   );
   protected readonly code = computed(() => this.parentCode() || this.state()?.visit.code || '');
   protected readonly formatNumeric = formatNumeric;
-  protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
 
   private readonly visibleRooms = computed(() =>
     (this.state()?.rooms ?? []).filter((r) => !r.hidden).sort((a, b) => a.position - b.position),
@@ -166,34 +163,15 @@ export class RoomPage {
   protected readonly draftName = signal('');
 
   // --- photos
-  private readonly deviceId = signal('');
-  /** URL d'objet des photos encore en file d'envoi, par identifiant. */
-  private pendingUrls = new Map<string, string>();
-  private readonly pendingSig = signal<ReadonlyMap<string, string>>(new Map());
-  /** Photos dont la présence en file a été vérifiée (évite d'afficher une URL serveur inutile). */
-  private readonly checked = signal<ReadonlySet<string>>(new Set());
-  private refreshToken = 0;
-  private destroyed = false;
-
   protected readonly photos = computed(() => {
     const code = this.code();
-    const device = this.deviceId();
-    const pending = this.pendingSig();
-    const checked = this.checked();
-    if (!device) return [];
+    const device = getDeviceId();
     return (this.state()?.photos ?? [])
-      .filter((p) => p.room_id === this.roomId() && checked.has(p.id))
-      .map((p) => ({ id: p.id, src: pending.get(p.id) ?? this.api.photoUrl(code, p.id, device) }));
+      .filter((p) => p.room_id === this.roomId())
+      .map((p) => ({ id: p.id, src: this.api.photoUrl(code, p.id, device) }));
   });
 
   constructor() {
-    void getDeviceId().then((id) => this.deviceId.set(id), () => undefined);
-    effect(() => {
-      const code = this.code();
-      const ids = (this.state()?.photos ?? []).map((p) => p.id);
-      this.sync.status(); // la file change quand une photo est envoyée
-      if (code) void this.refreshPending(code, ids);
-    });
     // navigation par l'URL, retour arrière : les brouillons de la pièce quittée sont enregistrés
     effect(() => {
       this.roomId();
@@ -202,36 +180,13 @@ export class RoomPage {
     onPageHidden(() => void this.flush());
     inject(DestroyRef).onDestroy(() => {
       void this.flush();
-      this.destroyed = true;
-      this.refreshToken++;
-      for (const url of this.pendingUrls.values()) URL.revokeObjectURL(url);
-      this.pendingUrls.clear();
     });
-  }
-
-  private async refreshPending(code: string, ids: string[]): Promise<void> {
-    const token = ++this.refreshToken;
-    let rows: Awaited<ReturnType<LocalStore['pendingPhotos']>>;
-    try {
-      rows = await this.store.pendingPhotos(code);
-    } catch {
-      rows = [];
-    }
-    if (this.destroyed || token !== this.refreshToken) return;
-    const next = new Map<string, string>();
-    for (const row of rows) {
-      next.set(row.id, this.pendingUrls.get(row.id) ?? URL.createObjectURL(row.blob));
-    }
-    for (const [id, url] of this.pendingUrls) if (!next.has(id)) URL.revokeObjectURL(url);
-    this.pendingUrls = next;
-    this.pendingSig.set(new Map(next));
-    this.checked.set(new Set(ids));
   }
 
   protected goTo(room: { id: string } | null): void {
     if (!room) return;
     void this.flush();
-    void this.router.navigate(['/v', this.code(), 'room', room.id]);
+    void this.router.navigate(['/annonces', this.code(), 'piece', room.id]);
   }
   protected goPrev(): void {
     this.goTo(this.prevRoom());
@@ -378,7 +333,7 @@ export class RoomPage {
     if (!ok) return;
     await this.flush();
     if (await this.run('hide_room', { room_id: this.roomId() })) {
-      void this.router.navigate(['/v', this.code(), 'rooms']);
+      void this.router.navigate(['/annonces', this.code(), 'pieces']);
     }
   }
 

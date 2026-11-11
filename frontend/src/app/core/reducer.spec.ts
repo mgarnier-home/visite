@@ -7,13 +7,7 @@ function baseState(): VisitState {
     seq: 1,
     me: { number: 2 },
     visit: {
-      code: 'abc', is_creator: false, created_at: '2026-01-01T00:00:00Z', closed_at: null,
-      fiche: {
-        address: 'rue A', price_eur: null, living_area_m2: null, floor_area_m2: null,
-        land_area_m2: null, visit_at: null, agent_name: null, agent_phone: null,
-        agent_email: null, construction_year: null, dpe_energy: null, dpe_ges: null,
-        rooms_count: null, bedrooms_count: null, listing_url: null, heating_type: null,
-      },
+      code: 'abc', created_at: '2026-01-01T00:00:00Z',
       packing_list: '', participants: 2,
     },
     rooms: [{ id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 3, hidden: false }],
@@ -47,21 +41,8 @@ describe('applyOp', () => {
     expect(s2.shared).toEqual([{ target_id: 'p1', field: 'blocking', value: false, updated_at: 20, author: 2 }]);
   });
 
-  it('set_shared sur le code de la visite : notes de la visite', () => {
-    const s = applyOp(baseState(), op('set_shared', { target_id: 'abc', field: 'notes', value: 'Rappeler' }, 10));
-    expect(s.shared).toEqual([{ target_id: 'abc', field: 'notes', value: 'Rappeler', updated_at: 10, author: 2 }]);
-    expect(applyOp(baseState(), op('set_shared', { target_id: 'autre', field: 'notes', value: 'x' })).shared).toEqual([]);
-  });
-
-  it('set_fiche fusionne les champs', () => {
-    const s = applyOp(baseState(), op('set_fiche', { fields: { price_eur: 250000 } }));
-    expect(s.visit.fiche.price_eur).toBe(250000);
-    expect(s.visit.fiche.address).toBe('rue A');
-  });
-
-  it('close_visit renseigne closed_at', () => {
-    const s = applyOp(baseState(), op('close_visit', {}, 0));
-    expect(s.visit.closed_at).toBe('1970-01-01T00:00:00.000Z');
+  it('set_shared sur une cible inconnue (dont le code de la visite) est ignoré', () => {
+    expect(applyOp(baseState(), op('set_shared', { target_id: 'abc', field: 'notes', value: 'x' })).shared).toEqual([]);
   });
 
   it('add_room avec note_point_id ajoute la pièce et le point note globale', () => {
@@ -117,8 +98,8 @@ describe('applyOp', () => {
     const copy = structuredClone(st);
     const types: [OpType, object][] = [
       ['set_rating', { point_id: 'p1', value: 1 }], ['set_comment', { room_id: 'r1', text: 't' }],
-      ['set_shared', { target_id: 'p1', field: 'value', value: 1 }], ['set_fiche', { fields: { address: 'z' } }],
-      ['close_visit', {}], ['add_room', { id: 'r2', name: 'n', from_section_id: null, note_point_id: 'n2' }],
+      ['set_shared', { target_id: 'p1', field: 'value', value: 1 }],
+      ['add_room', { id: 'r2', name: 'n', from_section_id: null, note_point_id: 'n2' }],
       ['rename_room', { room_id: 'r1', name: 'n' }], ['hide_room', { room_id: 'r1' }],
       ['add_point', { id: 'p2', room_id: 'r1', label: 'l', type: 'note', options: [] }],
       ['add_question', { id: 'q2', room_id: 'r1', text: 't' }],
