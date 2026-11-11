@@ -6,16 +6,34 @@ SQLite et un répertoire de photos.
 
 ## Fonctionnalités
 
-- Une visite est identifiée par un code (`^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$`) que plusieurs
-  participants peuvent rejoindre depuis leur téléphone.
-- Fiche du bien (adresse, prix, surfaces, DPE, agent, etc.) et liste de choses à emporter.
+- Suivi des annonces : on colle le texte partagé depuis Bien'ici ou Jinka (bouton « Partager »),
+  l'application retrouve le lien, récupère les caractéristiques et copie les photos sur le serveur.
+  Les statuts vont de « À contacter » à « Visite effectuée », ou « Écartée », dans les deux sens.
+- Sites pris en charge : Bien'ici et Jinka (récupération automatique). Leboncoin bloque les clients
+  qui ne sont pas des navigateurs : un lien Leboncoin (ou d'un autre site) crée une annonce en
+  saisie manuelle.
+- Une annonce a une seule visite, toujours modifiable, que plusieurs participants mènent depuis
+  leur téléphone (P1, P2…, un par appareil) : pas de compte, pas de code.
 - Modèle de visite par pièces : notes de 1 à 5, constats, cases à cocher, commentaires et
   questions à poser, avec pièces ajoutables ou masquables.
 - Valeurs partagées entre participants (blocage, coût des travaux, surfaces, réponses, notes
-  libres par pièce et pour la visite).
+  libres par pièce) ; les notes individuelles restent masquées aux autres.
 - Photos JPEG (2000 px au plus, 10 Mo maximum) rattachées à une pièce.
-- Synthèse : score pondéré sur 5 (N/A exclus), frais de notaire à 7,5 % du prix, export.
-- Utilisable hors ligne.
+- Bilan : score pondéré sur 5 (N/A exclus), frais de notaire à 7,5 % du prix, export CSV.
+- Pas de mode hors ligne : l'application suppose le réseau disponible.
+- Une base de la v1 est refusée au démarrage : il faut repartir d'un dossier de données vide.
+
+## Rafraîchir les annonces
+
+Rien n'est rafraîchi automatiquement. Le bouton « Rafraîchir » d'une annonce relit son site
+(`POST /api/listings/{id}/refresh`) ; pour toutes les annonces suivies, appelez la route suivante,
+par exemple depuis un cron (comptez environ une seconde par annonce) :
+
+```sh
+curl -X POST -H 'X-Device-Id: cron' http://localhost:8080/api/listings/refresh
+```
+
+La réponse est un rapport (annonces mises à jour, retirées du site ou en échec).
 
 ## Variables d'environnement
 
@@ -77,14 +95,13 @@ docker run --rm -p 8099:8080 -v "$PWD/data":/data visite:dev
 Tout est sous `/data` dans le conteneur :
 
 - `/data/visite.db` : base SQLite (avec ses fichiers `-wal` et `-shm`) ;
-- `/data/photos/<code>/<pièce>/…` : photos, nommées `AAAAMMJJ-HHMMSS-<8 hex>.jpg`.
+- `/data/photos/<id de l'annonce>/<pièce>/…` : photos, nommées `AAAAMMJJ-HHMMSS-<8 hex>.jpg`.
 
-## Synchronisation hors ligne
+## Synchronisation entre participants
 
-Chaque modification est enregistrée localement puis envoyée au serveur sous forme d'opérations
-idempotentes, regroupées par lots et rejouées avec un délai croissant (1, 2, 4, 8, 16 puis 30 s)
-tant que le réseau manque. En ligne et au premier plan, l'application récupère les changements des
-autres participants toutes les 5 secondes.
+Chaque modification est envoyée au serveur sous forme d'opérations idempotentes (dernière écriture
+gagnante). Au premier plan, l'application récupère les changements des autres participants toutes
+les 5 secondes.
 
 ## Déploiement
 
