@@ -33,10 +33,16 @@ function parisParts(iso: string, opts: Intl.DateTimeFormatOptions): Record<strin
 }
 
 /** « 14 nov » (avec l'année si ce n'est pas celle de `now`). */
-function day(iso: string, now: Date): string {
+export function day(iso: string, now: Date): string {
   const p = parisParts(iso, { day: 'numeric', month: 'short', year: 'numeric' });
   const sameYear = p['year'] === parisParts(now.toISOString(), { year: 'numeric' })['year'];
   return `${p['day']} ${p['month']}${sameYear ? '' : ' ' + p['year']}`;
+}
+
+/** « 14 nov 10:30 » (heure de Paris). */
+export function dayTime(iso: string, now: Date): string {
+  const p = parisParts(iso, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return `${day(iso, now)} ${p['hour']}:${p['minute']}`;
 }
 
 export function nextStepLine(l: Listing, now: Date): string {

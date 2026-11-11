@@ -1,0 +1,148 @@
+@if (l(); as l) {
+  <section class="tab">
+    <div class="gallery">
+      @if (l.photos.length) {
+        <div class="strip" data-test="photos" (scroll)="onScroll($event)">
+          @for (p of l.photos; track p.id) {
+            <img [src]="photoUrl(l, p.id)" alt="" loading="lazy" />
+          }
+        </div>
+        <span class="chip count" data-test="photo-count">{{ photoIndex() + 1 }} / {{ l.photos.length }}</span>
+      } @else {
+        <div class="strip empty" data-test="no-photo"><mat-icon svgIcon="home" /></div>
+      }
+      <span class="chip source">{{ source(l) }}</span>
+    </div>
+
+    <div class="body">
+      @if (l.removed_at) {
+        <p class="banner" role="status" data-test="removed">
+          <mat-icon svgIcon="warning" />Annonce retirée du site le {{ date(l.removed_at) }}
+        </p>
+      }
+      @if (l.fetch_error) {
+        <p class="banner" role="status" data-test="fetch-error">
+          <mat-icon svgIcon="warning" />Dernière récupération en échec : {{ l.fetch_error }}
+        </p>
+      }
+
+      <div class="head">
+        <div class="price-line">
+          <span class="price" data-test="price">{{ l.price_eur == null ? 'Prix inconnu' : formatEur(l.price_eur) }}</span>
+          @if (pricePerM2()) {
+            <span class="muted" data-test="price-m2">{{ pricePerM2() }}</span>
+          }
+        </div>
+        <span data-test="specs">{{ specs() }}</span>
+        <span class="muted">{{ place() }}</span>
+      </div>
+
+      <ol class="steps" aria-label="Avancement">
+        @for (s of steps(); track s.status) {
+          <li data-test="step" [class.current]="s.current">
+            <span class="bar" [style.background]="s.reached && l.status !== 'dropped' ? 'var(--status-' + l.status + '-fg)' : null"></span>
+            <span class="label">{{ s.label }}</span>
+            <span class="date">{{ s.date }}</span>
+          </li>
+        }
+      </ol>
+
+      @if (card(); as c) {
+        <div class="card" data-test="card" [style.background]="'var(--status-' + l.status + '-bg)'" [style.color]="'var(--status-' + l.status + '-fg)'">
+          <span class="kicker">{{ c.kicker }}</span>
+          <span class="title">{{ c.title }}</span>
+          <span class="text">{{ c.text }}</span>
+          @if (planning()) {
+            <app-date-time-input label="Date de la visite" [ngModel]="visitAt()" (ngModelChange)="setVisit($event)" />
+            <div class="actions">
+              <button mat-flat-button type="button" [disabled]="!visitAt() || busy()" (click)="savePlan()">Enregistrer</button>
+              <button mat-stroked-button type="button" (click)="planning.set(false)">Annuler</button>
+            </div>
+          } @else {
+            <div class="actions">
+              @switch (l.status) {
+                @case ('contact') {
+                  <button mat-flat-button type="button" [disabled]="busy()" (click)="setStatus('mail')">Mail envoyé</button>
+                  <button mat-stroked-button type="button" (click)="plan(false)">Planifier la visite</button>
+                }
+                @case ('mail') {
+                  <button mat-flat-button type="button" (click)="plan(false)">Planifier la visite</button>
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="setStatus('contact')">Revenir à « À contacter »</button>
+                }
+                @case ('planned') {
+                  <button mat-flat-button type="button" [disabled]="busy()" (click)="setStatus('done')">Visite effectuée</button>
+                  <button mat-stroked-button type="button" (click)="plan(true)">Changer la date</button>
+                }
+                @case ('done') {
+                  <a mat-flat-button [routerLink]="['/annonces', l.id, 'bilan']">Voir le bilan</a>
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="setStatus('planned')">Revenir à « Visite planifiée »</button>
+                }
+                @default {
+                  <button mat-flat-button type="button" [disabled]="busy()" (click)="setStatus('contact')">Remettre dans la liste</button>
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <section>
+        <h2>Caractéristiques</h2>
+        <dl class="specs">
+          @for (r of characteristics(); track r.k) {
+            <div data-test="spec"><dt>{{ r.k }}</dt><dd>{{ r.v }}</dd></div>
+          }
+        </dl>
+        @if (l.description) {
+          <button mat-button type="button" (click)="showDescription.set(!showDescription())">
+            {{ showDescription() ? 'Masquer la description' : 'Lire la description de l’annonce' }}
+          </button>
+          @if (showDescription()) {
+            <p class="description" data-test="description">{{ l.description }}</p>
+          }
+        }
+      </section>
+
+      @if (l.agency || l.agent_phone || l.agent_email) {
+        <section>
+          <h2>Contact</h2>
+          @if (l.agency) {
+            <span>{{ l.agency }}</span>
+          }
+          <div class="actions">
+            @if (l.agent_phone) {
+              <a mat-stroked-button [href]="'tel:' + l.agent_phone"><mat-icon svgIcon="call" />{{ l.agent_phone }}</a>
+            }
+            @if (l.agent_email) {
+              <a mat-stroked-button [href]="'mailto:' + l.agent_email"><mat-icon svgIcon="mail" />E-mail</a>
+            }
+          </div>
+        </section>
+      }
+
+      <section>
+        <label for="notes"><h2>Notes</h2></label>
+        <textarea id="notes" rows="3" [ngModel]="l.notes" (ngModelChange)="onNotes($event)" (blur)="saveNotes()"></textarea>
+      </section>
+
+      <section class="foot">
+        <a [href]="l.url" target="_blank" rel="noopener">Voir l’annonce{{ l.source === 'manual' ? '' : ' sur ' + source(l) }}</a>
+        <span class="muted">
+          Ajoutée le {{ date(l.created_at) }}@if (l.fetched_at) { · infos récupérées le {{ date(l.fetched_at) }} }
+        </span>
+        @if (refreshError()) {
+          <p class="error" role="alert" data-test="refresh-error">{{ refreshError() }}</p>
+        }
+        <div class="actions">
+          @if (l.source !== 'manual') {
+            <button mat-stroked-button type="button" [disabled]="busy()" (click)="refresh()">Rafraîchir</button>
+          }
+          @if (l.status !== 'dropped') {
+            <button mat-stroked-button type="button" [disabled]="busy()" (click)="setStatus('dropped')">Écarter</button>
+          }
+          <button mat-button type="button" class="danger" (click)="remove()">Supprimer</button>
+        </div>
+      </section>
+    </div>
+  </section>
+}

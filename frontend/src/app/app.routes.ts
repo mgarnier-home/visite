@@ -24,7 +24,11 @@ export const routes: Routes = [
     path: 'annonces/:id',
     loadComponent: () => import('./features/visit/visit-shell.page').then((m) => m.VisitShellPage),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'pieces' },
+      { path: '', pathMatch: 'full', redirectTo: 'annonce' },
+      {
+        path: 'annonce',
+        loadComponent: () => import('./features/listings/listing-tab.component').then((m) => m.ListingTabComponent),
+      },
       {
         path: 'pieces',
         loadComponent: () => import('./features/visit/rooms-tab.component').then((m) => m.RoomsTabComponent),

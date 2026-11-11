@@ -69,7 +69,7 @@ describe('VisitShellPage', () => {
   }
   const text = (el: HTMLElement, sel: string) => el.querySelector(sel)?.textContent?.trim();
 
-  it('charge l\'annonce, rejoint, ouvre la synchronisation, affiche trois onglets, ferme à la destruction', async () => {
+  it('charge l\'annonce, rejoint, ouvre la synchronisation, affiche quatre onglets, ferme à la destruction', async () => {
     const { fixture, el } = await setup();
     expect(api.getListing).toHaveBeenCalledWith('maison-x');
     expect(api.join).toHaveBeenCalledWith('maison-x');
@@ -77,7 +77,7 @@ describe('VisitShellPage', () => {
     expect(TestBed.inject(CurrentListing).listing()?.price_eur).toBe(250000);
     expect(text(el, '[data-test=title]')).toBe('Maison · Lyon');
     expect(Array.from(el.querySelectorAll('a[mat-tab-link]')).map((a) => a.textContent?.replace(/\d+$/, '').trim())).toEqual([
-      'Pièces', 'Questions', 'Bilan',
+      'Annonce', 'Pièces', 'Questions', 'Bilan',
     ]);
     fixture.destroy();
     expect(sync.close).toHaveBeenCalled();
@@ -92,9 +92,9 @@ describe('VisitShellPage', () => {
 
   it('badge des questions non posées sur l\'onglet Questions, masqué à 0', async () => {
     const { fixture, el } = await setup();
-    const badge = () => el.querySelectorAll('a[mat-tab-link]')[1].querySelector('.mat-badge-content');
+    const badge = () => el.querySelectorAll('a[mat-tab-link]')[2].querySelector('.mat-badge-content');
     expect(badge()?.textContent?.trim()).toBe('1');
-    expect(el.querySelectorAll('a[mat-tab-link]')[0].querySelector('.mat-badge-content')).toBeNull();
+    expect(el.querySelectorAll('a[mat-tab-link]')[1].querySelector('.mat-badge-content')).toBeNull();
     state.set({ ...stateOf(), shared: [] , questions: [] } as unknown as VisitState);
     fixture.detectChanges();
     const b = badge();
@@ -143,7 +143,7 @@ describe('VisitShellPage', () => {
     expect(sync.open).toHaveBeenCalledWith('b');
     expect(TestBed.inject(CurrentListing).listing()?.id).toBe('b');
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('a[mat-tab-link]')?.getAttribute('href')).toBe('/annonces/b/pieces');
+    expect(el.querySelector('a[mat-tab-link]')?.getAttribute('href')).toBe('/annonces/b/annonce');
   });
 
   describe('indicateur de synchronisation', () => {

@@ -52,6 +52,7 @@ export class VisitShellPage implements OnDestroy {
     return s ? unaskedCount(s) : 0;
   });
   protected readonly tabs = [
+    { path: 'annonce', label: 'Annonce' },
     { path: 'pieces', label: 'Pièces' },
     { path: 'questions', label: 'Questions' },
     { path: 'bilan', label: 'Bilan' },
