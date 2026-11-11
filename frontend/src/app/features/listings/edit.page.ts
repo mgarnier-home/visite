@@ -66,7 +66,7 @@ export class EditPage {
   protected readonly values = signal<Record<string, string>>({});
   protected readonly features = signal<string[]>([]);
   protected readonly status = signal<ListingStatus>('contact');
-  protected visitAt: string | null = null;
+  protected readonly visitAt = signal<string | null>(null);
 
   protected readonly numbers = NUMBERS;
   protected readonly texts = TEXTS;
@@ -77,7 +77,7 @@ export class EditPage {
     const l = this.listing();
     return l ? (l.source === 'manual' ? 'Saisie manuelle' : `${sourceLabel(l.source)} · récupéré à l'instant`) : '';
   });
-  protected readonly canSave = computed(() => !this.busy() && (this.status() !== 'planned' || !!this.visitAt));
+  protected readonly canSave = computed(() => !this.busy() && (this.status() !== 'planned' || !!this.visitAt()));
 
   constructor() {
     this.api.getListing(this.id).then(
@@ -107,7 +107,7 @@ export class EditPage {
   }
 
   protected setVisit(v: string | null): void {
-    this.visitAt = v;
+    this.visitAt.set(v);
   }
 
   protected async save(): Promise<void> {
@@ -116,7 +116,7 @@ export class EditPage {
     const patch: Record<string, unknown> = { status: this.status(), features: this.features() };
     for (const f of NUMBERS) patch[f.key] = parseNumeric(v[f.key]);
     for (const f of TEXTS) patch[f.key] = v[f.key].trim();
-    if (this.status() === 'planned') patch['visit_at'] = this.visitAt;
+    if (this.status() === 'planned') patch['visit_at'] = this.visitAt();
     this.busy.set(true);
     this.saveError.set('');
     try {

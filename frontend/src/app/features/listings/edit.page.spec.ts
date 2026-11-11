@@ -73,6 +73,16 @@ describe('EditPage', () => {
     expect(s.el.querySelector('app-date-time-input')).not.toBeNull();
   });
 
+  it('« Visite planifiée » : enregistrer exige une date, puis se débloque', async () => {
+    const s = await setup(listing());
+    await s.click('[data-test="status-planned"]');
+    const save = s.el.querySelector<HTMLButtonElement>('[data-test=save]')!;
+    expect(save.disabled).toBe(true);
+    (s.fixture.componentInstance as unknown as { setVisit(v: string): void }).setVisit('2030-12-25T14:30:00.000Z');
+    s.fixture.detectChanges();
+    expect(save.disabled).toBe(false);
+  });
+
   it('« Ajouter à la liste » : un seul PATCH puis la fiche', async () => {
     const s = await setup(listing());
     s.field('price_eur').value = '300000';

@@ -68,7 +68,7 @@
         }
       </div>
       @if (status() === 'planned') {
-        <app-date-time-input label="Visite planifiée" [ngModel]="visitAt" (ngModelChange)="setVisit($event)" />
+        <app-date-time-input label="Visite planifiée" [ngModel]="visitAt()" (ngModelChange)="setVisit($event)" />
       }
     </section>
 
