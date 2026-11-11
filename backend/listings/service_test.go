@@ -20,14 +20,18 @@ import (
 )
 
 type fakeFetcher struct {
-	calls  int
-	res    scrape.Result
-	err    error
-	errFor map[string]error // erreur par URL, prioritaire sur err
+	calls   int
+	res     scrape.Result
+	err     error
+	errFor  map[string]error // erreur par URL, prioritaire sur err
+	onFetch func()           // appelé à chaque lecture
 }
 
 func (f *fakeFetcher) Fetch(ctx context.Context, source, url string) (scrape.Result, error) {
 	f.calls++
+	if f.onFetch != nil {
+		f.onFetch()
+	}
 	if err, ok := f.errFor[url]; ok {
 		return scrape.Result{}, err
 	}
@@ -308,5 +312,35 @@ func TestRefreshAll(t *testing.T) {
 	}
 	if e.f.calls != 2 || rep.Updated != 1 || rep.Removed != 0 || len(rep.Failed) != 1 || rep.Failed[0].ID != bad.ID || rep.Failed[0].Error == "" {
 		t.Errorf("calls=%d rapport=%+v", e.f.calls, rep)
+	}
+}
+
+func TestRefreshAllCancelDuringPause(t *testing.T) {
+	e := newEnv(t)
+	e.f.res = scrape.Result{Data: model.ListingData{PriceEUR: f64(1)}}
+	create(t, e, "a", "")
+	create(t, e, "b", "")
+	e.f.calls = 0
+	ctx, cancel := context.WithCancel(context.Background())
+	e.f.onFetch = func() { time.AfterFunc(50*time.Millisecond, cancel) } // annule pendant la pause
+	rep, err := e.svc.RefreshAll(ctx, time.Hour)
+	if !errors.Is(err, context.Canceled) || rep.Updated != 1 || e.f.calls != 1 {
+		t.Errorf("err=%v rapport=%+v appels=%d", err, rep, e.f.calls)
+	}
+}
+
+func TestRefreshCancelledFetchKeepsData(t *testing.T) {
+	e := newEnv(t)
+	e.f.res = scrape.Result{Data: model.ListingData{PriceEUR: f64(1)}}
+	l := create(t, e, "a", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	e.f.onFetch = func() { cancel(); e.f.err = ctx.Err() }
+	rep, err := e.svc.RefreshAll(ctx, 0)
+	if !errors.Is(err, context.Canceled) || len(rep.Failed) != 0 {
+		t.Errorf("err=%v rapport=%+v", err, rep)
+	}
+	got, _ := e.svc.Store.GetListing(context.Background(), l.ID)
+	if got.FetchError != "" {
+		t.Errorf("fetch_error = %q", got.FetchError)
 	}
 }

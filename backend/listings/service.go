@@ -138,6 +138,9 @@ func (s *Service) Refresh(ctx context.Context, id string) (model.Listing, error)
 		return s.Store.GetListing(ctx, id)
 	}
 	if err != nil {
+		if ctx.Err() != nil { // annulation : pas un échec du site, rien à enregistrer
+			return model.Listing{}, ctx.Err()
+		}
 		if e := s.Store.SetFetchFailure(ctx, id, false, err.Error(), now); e != nil {
 			return model.Listing{}, e
 		}
@@ -171,6 +174,8 @@ func (s *Service) RefreshAll(ctx context.Context, pause time.Duration) (Report, 
 		}
 		l, err := s.Refresh(ctx, id)
 		switch {
+		case err != nil && ctx.Err() != nil:
+			return rep, ctx.Err() // rapport partiel : les annonces déjà traitées
 		case errors.Is(err, store.ErrNotFound): // supprimée entre-temps
 		case err != nil:
 			rep.Failed = append(rep.Failed, Failure{ID: id, Error: err.Error()})

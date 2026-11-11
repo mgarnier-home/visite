@@ -179,8 +179,11 @@ func (h *handlers) refreshListing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) refreshAll(w http.ResponseWriter, r *http.Request) {
+	// Le serveur coupe l'écriture après 60 s : on lève cette limite pour cette seule requête.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	rep, err := h.listings.RefreshAll(r.Context(), time.Second)
-	if err != nil {
+	// Requête annulée : on répond quand même 200 avec le rapport partiel (annonces déjà traitées).
+	if err != nil && r.Context().Err() == nil {
 		h.internalError(w, err)
 		return
 	}
