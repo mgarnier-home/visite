@@ -86,12 +86,101 @@ func (s *Service) Create(ctx context.Context, text string) (model.Listing, error
 		return model.Listing{}, err
 	}
 
-	for _, u := range res.PhotoURLs {
-		if err := s.addPhoto(ctx, l.ID, u); err != nil && s.Log != nil {
+	s.addPhotos(ctx, l.ID, res.PhotoURLs, nil)
+	return s.Store.GetListing(ctx, l.ID)
+}
+
+// addPhotos télécharge les photos absentes de known ; une photo qui échoue est ignorée et journalisée.
+func (s *Service) addPhotos(ctx context.Context, listingID string, urls []string, known map[string]bool) {
+	for _, u := range urls {
+		if known[u] {
+			continue
+		}
+		if err := s.addPhoto(ctx, listingID, u); err != nil && s.Log != nil {
 			s.Log.Warnf("photo %s ignorée : %v", u, err)
 		}
 	}
-	return s.Store.GetListing(ctx, l.ID)
+}
+
+// ErrManual : une annonce saisie à la main n'a pas de site à relire.
+var ErrManual = errors.New("annonce saisie à la main : rien à rafraîchir")
+
+// Failure : une annonce dont la relecture a échoué.
+type Failure struct {
+	ID    string `json:"id"`
+	Error string `json:"error"`
+}
+
+// Report résume « Tout rafraîchir ».
+type Report struct {
+	Updated int       `json:"updated"`
+	Removed int       `json:"removed"`
+	Failed  []Failure `json:"failed"`
+}
+
+// Refresh relit l'annonce : caractéristiques et raw remplacées, nouvelles photos ajoutées, suivi
+// intact. Annonce retirée du site (scrape.ErrRemoved) : removed_at renseigné, annonce renvoyée sans
+// erreur. Autre échec : fetch_error renseigné, données gardées, erreur ErrFetch.
+func (s *Service) Refresh(ctx context.Context, id string) (model.Listing, error) {
+	cur, err := s.Store.GetListing(ctx, id)
+	if err != nil {
+		return model.Listing{}, err
+	}
+	if cur.Source == scrape.SourceManual {
+		return model.Listing{}, ErrManual
+	}
+	now := s.Now()
+	res, err := s.Fetcher.Fetch(ctx, cur.Source, cur.URL)
+	if errors.Is(err, scrape.ErrRemoved) {
+		if err := s.Store.SetFetchFailure(ctx, id, true, "", now); err != nil {
+			return model.Listing{}, err
+		}
+		return s.Store.GetListing(ctx, id)
+	}
+	if err != nil {
+		if e := s.Store.SetFetchFailure(ctx, id, false, err.Error(), now); e != nil {
+			return model.Listing{}, e
+		}
+		return model.Listing{}, fmt.Errorf("%w: %w", ErrFetch, err)
+	}
+	if err := s.Store.ApplyFetch(ctx, id, res.Data, res.Raw, now); err != nil {
+		return model.Listing{}, err
+	}
+	known, err := s.Store.ListingPhotoURLs(ctx, id)
+	if err != nil {
+		return model.Listing{}, err
+	}
+	s.addPhotos(ctx, id, res.PhotoURLs, known)
+	return s.Store.GetListing(ctx, id)
+}
+
+// RefreshAll relit une à une les annonces non écartées et non manuelles, avec pause entre deux.
+func (s *Service) RefreshAll(ctx context.Context, pause time.Duration) (Report, error) {
+	ids, err := s.Store.RefreshCandidates(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	rep := Report{Failed: []Failure{}}
+	for i, id := range ids {
+		if i > 0 {
+			select {
+			case <-time.After(pause):
+			case <-ctx.Done():
+				return rep, ctx.Err()
+			}
+		}
+		l, err := s.Refresh(ctx, id)
+		switch {
+		case errors.Is(err, store.ErrNotFound): // supprimée entre-temps
+		case err != nil:
+			rep.Failed = append(rep.Failed, Failure{ID: id, Error: err.Error()})
+		case l.RemovedAt != nil:
+			rep.Removed++
+		default:
+			rep.Updated++
+		}
+	}
+	return rep, nil
 }
 
 // addPhoto télécharge l'image et l'enregistre ; elle refuse le non-https, le non-image et le > 15 Mo.

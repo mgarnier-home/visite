@@ -352,3 +352,66 @@ func (s *Store) UpdateListing(ctx context.Context, id string, fields map[string]
 	})
 	return out, err
 }
+
+// ApplyFetch remplace les caractéristiques et raw par celles d'une nouvelle lecture ; fetched_at
+// prend now, fetch_error et removed_at sont vidés. Le suivi (statut, dates, adresse, notes) reste.
+func (s *Store) ApplyFetch(ctx context.Context, id string, d model.ListingData, raw json.RawMessage, now time.Time) error {
+	features, err := json.Marshal(append([]string{}, d.Features...))
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE listings SET title=?, property_type=?, price_eur=?,
+		living_area_m2=?, land_area_m2=?, rooms=?, bedrooms=?, bathrooms=?, shower_rooms=?, toilets=?,
+		parking=?, floor=?, construction_year=?, dpe=?, ges=?, heating=?, city=?, postal_code=?,
+		description=?, agency=?, agent_phone=?, agent_email=?, features=?, raw=?, fetched_at=?,
+		fetch_error='', removed_at=NULL WHERE id=?`,
+		d.Title, d.PropertyType, d.PriceEUR, d.LivingAreaM2, d.LandAreaM2, d.Rooms, d.Bedrooms,
+		d.Bathrooms, d.ShowerRooms, d.Toilets, d.Parking, d.Floor, d.ConstructionYear, d.DPE, d.GES,
+		d.Heating, d.City, d.PostalCode, d.Description, d.Agency, d.AgentPhone, d.AgentEmail,
+		string(features), string(raw), now.UTC().Format(time.RFC3339), id)
+	return oneRow(res, err)
+}
+
+// SetFetchFailure note l'échec d'une lecture sans toucher aux données : removed renseigne
+// removed_at (annonce retirée du site), sinon msg va dans fetch_error.
+func (s *Store) SetFetchFailure(ctx context.Context, id string, removed bool, msg string, now time.Time) error {
+	var res sql.Result
+	var err error
+	if removed {
+		res, err = s.db.ExecContext(ctx, `UPDATE listings SET removed_at=? WHERE id=?`, now.UTC().Format(time.RFC3339), id)
+	} else {
+		res, err = s.db.ExecContext(ctx, `UPDATE listings SET fetch_error=? WHERE id=?`, msg, id)
+	}
+	return oneRow(res, err)
+}
+
+func oneRow(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RefreshCandidates renvoie les id des annonces à relire : ni manuelles, ni écartées.
+func (s *Store) RefreshCandidates(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM listings WHERE source != 'manual' AND status != 'dropped' ORDER BY created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

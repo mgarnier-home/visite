@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -24,6 +25,8 @@ var photoTypes = map[string]string{
 func (h *handlers) registerListingRoutes(api *mux.Router) {
 	api.HandleFunc("/listings", h.listListings).Methods(http.MethodGet)
 	api.HandleFunc("/listings", h.createListing).Methods(http.MethodPost)
+	api.HandleFunc("/listings/refresh", h.refreshAll).Methods(http.MethodPost)
+	api.HandleFunc("/listings/{id}/refresh", h.refreshListing).Methods(http.MethodPost)
 	api.HandleFunc("/listings/{id}", h.getListing).Methods(http.MethodGet)
 	api.HandleFunc("/listings/{id}", h.patchListing).Methods(http.MethodPatch)
 	api.HandleFunc("/listings/{id}", h.deleteListing).Methods(http.MethodDelete)
@@ -152,4 +155,34 @@ func (h *handlers) listingPhoto(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	_, _ = io.Copy(w, f)
+}
+
+func (h *handlers) refreshListing(w http.ResponseWriter, r *http.Request) {
+	id, ok := requireCode(w, r)
+	if !ok {
+		return
+	}
+	l, err := h.listings.Refresh(r.Context(), id)
+	switch {
+	case errors.Is(err, listings.ErrManual):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, listings.ErrFetch):
+		if h.log != nil {
+			h.log.Warnf("rafraîchissement de l'annonce : %v", err)
+		}
+		writeError(w, http.StatusBadGateway, "le site n'a pas renvoyé l'annonce")
+	case err != nil:
+		h.listingErr(w, err)
+	default:
+		writeJSON(w, http.StatusOK, l)
+	}
+}
+
+func (h *handlers) refreshAll(w http.ResponseWriter, r *http.Request) {
+	rep, err := h.listings.RefreshAll(r.Context(), time.Second)
+	if err != nil {
+		h.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
 }

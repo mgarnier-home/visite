@@ -115,3 +115,35 @@ func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+func TestRefreshAPI(t *testing.T) {
+	f := &stubFetcher{res: scrape.Result{Data: model.ListingData{Title: "Maison"}}}
+	router, _ := newListingsRouter(t, f, nil)
+	rec := do(t, router, "POST", "/api/listings", "", `{"text":`+jsonString("https://www.bienici.com/annonce/vente/x/maison/refr")+`}`)
+	wantCode(t, rec, http.StatusCreated)
+	var l model.Listing
+	json.Unmarshal(rec.Body.Bytes(), &l)
+
+	wantCode(t, do(t, router, "POST", "/api/listings/"+l.ID+"/refresh", "", ""), http.StatusOK)
+	wantCode(t, do(t, router, "POST", "/api/listings/"+unknownID+"/refresh", "", ""), http.StatusNotFound)
+	wantCode(t, do(t, router, "POST", "/api/listings/pas-un-uuid/refresh", "", ""), http.StatusBadRequest)
+
+	rec = do(t, router, "POST", "/api/listings/refresh", "", "")
+	wantCode(t, rec, http.StatusOK)
+	var rep listings.Report
+	if err := json.Unmarshal(rec.Body.Bytes(), &rep); err != nil || rep.Updated < 1 {
+		t.Errorf("rapport : %s", rec.Body.String())
+	}
+
+	f.err = errors.New("boum")
+	wantCode(t, do(t, router, "POST", "/api/listings/"+l.ID+"/refresh", "", ""), http.StatusBadGateway)
+	got, _ := testStore.GetListing(context.Background(), l.ID)
+	if got.FetchError == "" || got.Title != "Maison" {
+		t.Errorf("annonce : %+v", got)
+	}
+
+	man := do(t, router, "POST", "/api/listings", "", `{"text":"x https://www.leboncoin.fr/ad/ventes_immobilieres/9"}`)
+	var m model.Listing
+	json.Unmarshal(man.Body.Bytes(), &m)
+	wantCode(t, do(t, router, "POST", "/api/listings/"+m.ID+"/refresh", "", ""), http.StatusBadRequest)
+}

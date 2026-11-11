@@ -3,6 +3,7 @@ package listings
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -19,13 +20,17 @@ import (
 )
 
 type fakeFetcher struct {
-	calls int
-	res   scrape.Result
-	err   error
+	calls  int
+	res    scrape.Result
+	err    error
+	errFor map[string]error // erreur par URL, prioritaire sur err
 }
 
 func (f *fakeFetcher) Fetch(ctx context.Context, source, url string) (scrape.Result, error) {
 	f.calls++
+	if err, ok := f.errFor[url]; ok {
+		return scrape.Result{}, err
+	}
 	return f.res, f.err
 }
 
@@ -173,5 +178,135 @@ func TestCreateManualRawLink(t *testing.T) {
 	}
 	if want := "J'ai trouvé une annonce qui devrait vous intéresser sur leboncoin"; l.Title != want {
 		t.Errorf("titre = %q", l.Title)
+	}
+}
+
+const bieniciURL = "https://www.bienici.com/annonce/vente/x/maison/"
+
+func f64(v float64) *float64 { return &v }
+
+func create(t *testing.T, e *env, suffix string, status model.ListingStatus) model.Listing {
+	t.Helper()
+	l, err := e.svc.Create(context.Background(), bieniciURL+suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status != "" {
+		if l, err = e.svc.Store.UpdateListing(context.Background(), l.ID,
+			map[string]json.RawMessage{"status": json.RawMessage(`"` + string(status) + `"`)}, e.svc.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return l
+}
+
+func TestRefreshKeepsTracking(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.f.res = scrape.Result{Data: model.ListingData{Title: "Maison", PriceEUR: f64(300000)}}
+	l := create(t, e, "a", "")
+	_, err := e.svc.Store.UpdateListing(ctx, l.ID, map[string]json.RawMessage{
+		"status": json.RawMessage(`"planned"`), "visit_at": json.RawMessage(`"2026-12-01T10:00:00Z"`),
+		"address": json.RawMessage(`"1 rue X"`), "notes": json.RawMessage(`"vu"`), "price_eur": json.RawMessage(`290000`),
+	}, e.svc.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.f.res = scrape.Result{Data: model.ListingData{Title: "Maison", PriceEUR: f64(280000)}}
+	got, err := e.svc.Refresh(ctx, l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *got.PriceEUR != 280000 || got.Status != model.StatusPlanned || got.VisitAt == nil ||
+		*got.VisitAt != "2026-12-01T10:00:00Z" || got.Address != "1 rue X" || got.Notes != "vu" {
+		t.Errorf("annonce inattendue : %+v", got)
+	}
+}
+
+func TestRefreshAddsNewPhotos(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	a, b, c := e.srv.URL+"/a.jpg", e.srv.URL+"/b.jpg", e.srv.URL+"/c.jpg"
+	e.f.res = scrape.Result{PhotoURLs: []string{a, b}}
+	l := create(t, e, "a", "")
+	e.f.res = scrape.Result{PhotoURLs: []string{a, c}}
+	got, err := e.svc.Refresh(ctx, l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Photos) != 3 {
+		t.Fatalf("%d photos, voulu 3", len(got.Photos))
+	}
+	for i, p := range got.Photos {
+		if p.Position != i {
+			t.Errorf("photo %d en position %d", i, p.Position)
+		}
+	}
+}
+
+func TestRefreshRemoved(t *testing.T) {
+	e := newEnv(t)
+	e.f.res = scrape.Result{Data: model.ListingData{Title: "Maison", PriceEUR: f64(1)}}
+	l := create(t, e, "a", "")
+	e.f.err = scrape.ErrRemoved
+	got, err := e.svc.Refresh(context.Background(), l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RemovedAt == nil || got.Title != "Maison" || got.FetchError != "" {
+		t.Errorf("annonce inattendue : %+v", got)
+	}
+}
+
+func TestRefreshFormatError(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.f.res = scrape.Result{Data: model.ListingData{PriceEUR: f64(1)}}
+	l := create(t, e, "a", "")
+	e.f.err = scrape.ErrFormat
+	if _, err := e.svc.Refresh(ctx, l.ID); !errors.Is(err, ErrFetch) || !errors.Is(err, scrape.ErrFormat) {
+		t.Fatalf("err = %v", err)
+	}
+	got, _ := e.svc.Store.GetListing(ctx, l.ID)
+	if got.FetchError == "" || *got.PriceEUR != 1 || got.RemovedAt != nil {
+		t.Errorf("après échec : %+v", got)
+	}
+	e.f.err = nil
+	e.f.res = scrape.Result{Data: model.ListingData{PriceEUR: f64(2)}}
+	got, err := e.svc.Refresh(ctx, l.ID)
+	if err != nil || got.FetchError != "" || *got.PriceEUR != 2 {
+		t.Errorf("après succès : %+v, %v", got, err)
+	}
+}
+
+func TestRefreshManual(t *testing.T) {
+	e := newEnv(t)
+	l, err := e.svc.Create(context.Background(), "x https://www.leboncoin.fr/ad/ventes_immobilieres/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Refresh(context.Background(), l.ID); !errors.Is(err, ErrManual) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRefreshAll(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.f.res = scrape.Result{Data: model.ListingData{PriceEUR: f64(1)}}
+	create(t, e, "ok", "")
+	bad := create(t, e, "bad", "")
+	create(t, e, "dropped", model.StatusDropped)
+	if _, err := e.svc.Create(ctx, "x https://www.leboncoin.fr/ad/ventes_immobilieres/1"); err != nil {
+		t.Fatal(err)
+	}
+	e.f.calls = 0
+	e.f.errFor = map[string]error{bieniciURL + "bad": scrape.ErrFormat}
+	rep, err := e.svc.RefreshAll(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.f.calls != 2 || rep.Updated != 1 || rep.Removed != 0 || len(rep.Failed) != 1 || rep.Failed[0].ID != bad.ID || rep.Failed[0].Error == "" {
+		t.Errorf("calls=%d rapport=%+v", e.f.calls, rep)
 	}
 }
