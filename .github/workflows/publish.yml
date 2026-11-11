@@ -79,8 +79,6 @@ jobs:
             --build-arg "VERSION=v$VERSION" \
             --build-arg "COMMIT=$COMMIT" \
             --build-arg "DATE=$BUILD_DATE" \
-            --cache-from "type=registry,ref=registry.mgarnier11.fr/visite:buildcache-$ARCH" \
-            --cache-to "type=registry,ref=registry.mgarnier11.fr/visite:buildcache-$ARCH,mode=max" \
             --push \
             .
 

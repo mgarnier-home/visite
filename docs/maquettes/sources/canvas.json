@@ -1,0 +1,20 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-11T10:00:00Z" },
+  "title": "Visite 2.0 — maquettes",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 390, "h": 1180, "title": "1 · Accueil (mobile) — variante A : liste par statut" },
+    "Ajout.dc.html": { "x": 470, "y": 0, "w": 390, "h": 844, "title": "2 · Ajouter : coller le texte partagé" },
+    "Apercu.dc.html": { "x": 940, "y": 0, "w": 390, "h": 1380, "title": "3 · Ajouter : infos récupérées (tweak : site)" },
+    "Annonce.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 1760, "title": "4 · Annonce, 1er onglet de Annonce | Pièces | Questions | Bilan (tweak : statut)" },
+    "Bureau.dc.html": { "x": 0, "y": 2020, "w": 1280, "h": 900, "title": "5 · Accueil (ordinateur) — variante B : colonnes par statut" }
+  },
+  "order": ["Main.dc.html", "Ajout.dc.html", "Apercu.dc.html", "Annonce.dc.html", "Bureau.dc.html"],
+  "notes": {
+    "titleMobile": { "x": 0, "y": -300, "text": "Téléphone", "kind": "title1", "maxW": 1800 },
+    "titleDesktop": { "x": 0, "y": 1760, "text": "Ordinateur", "kind": "title1", "maxW": 1280 }
+  },
+  "designSystems": []
+}

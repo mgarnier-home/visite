@@ -11,7 +11,6 @@
         <mat-checkbox
           data-test="asked"
           [checked]="q.asked"
-          [disabled]="closed()"
           (change)="setAsked(q.question.id, $event.checked)"
         >Posée</mat-checkbox>
         <textarea
@@ -20,7 +19,6 @@
           aria-label="Réponse"
           placeholder="Réponse"
           [value]="shown(q.question.id, q.answer)"
-          [disabled]="closed()"
           (input)="onInput(q.question.id, $event)"
           (blur)="onBlur(q.question.id, $event)"
         ></textarea>

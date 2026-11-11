@@ -19,10 +19,13 @@ func raw(s string) json.RawMessage { return json.RawMessage(s) }
 func fixture() Data {
 	return Data{
 		Code: "maison-test",
-		Fiche: model.Fiche{
-			Address: "1 rue des Lilas", PriceEUR: ptr(250000.0), LivingAreaM2: ptr(120.0),
-			VisitAt: ptr("2026-10-25T10:00:00Z"), AgentName: ptr("Mme Martin"),
-			ConstructionYear: ptr(1990), BedroomsCount: ptr(3),
+		Listing: model.Listing{
+			URL: "https://www.bienici.com/annonce/1", Address: "1 rue des Lilas",
+			VisitAt: ptr("2026-10-25T10:00:00Z"), Notes: "Rappeler l'agent",
+			ListingData: model.ListingData{
+				PriceEUR: ptr(250000.0), LivingAreaM2: ptr(120.0), ConstructionYear: ptr(1990),
+				Bedrooms: ptr(3), DPE: "D", Agency: "Agence Martin",
+			},
 		},
 		Participants: 2,
 		Rooms: []model.Room{
@@ -42,12 +45,11 @@ func fixture() Data {
 			{ID: "q-ch", RoomID: "r-salon", Text: "Charges ?", Position: 1},
 		},
 		Shared: map[string]map[string]json.RawMessage{
-			"maison-test": {"notes": raw(`"Rappeler l'agent"`)},
-			"r-salon":     {"area_m2": raw("22.5"), "notes": raw(`"Fenêtre fissurée"`)},
-			"p-fen":       {"value": raw(`"problem"`), "blocking": raw("true"), "works_eur": raw("1500")},
-			"p-sol":       {"value": raw(`"parquet"`), "blocking": raw("false")},
-			"p-hum":       {"works_eur": raw("999")},
-			"q-ch":        {"answer": raw(`"120 €/mois"`), "asked": raw("true")},
+			"r-salon": {"area_m2": raw("22.5"), "notes": raw(`"Fenêtre fissurée"`)},
+			"p-fen":   {"value": raw(`"problem"`), "blocking": raw("true"), "works_eur": raw("1500")},
+			"p-sol":   {"value": raw(`"parquet"`), "blocking": raw("false")},
+			"p-hum":   {"works_eur": raw("999")},
+			"q-ch":    {"answer": raw(`"120 €/mois"`), "asked": raw("true")},
 		},
 		Ratings: map[string]map[int]*int{
 			"p-lum": {1: ptr(4), 2: nil},
@@ -172,9 +174,10 @@ func TestFormulaInjectionEscaped(t *testing.T) {
 	for _, prefix := range []string{"=", "+", "-", "@", "\t", "\r"} {
 		d := fixture()
 		v := prefix + "x"
-		d.Fiche.Address = v
-		d.Fiche.AgentPhone = ptr(v)
-		d.Fiche.ListingURL = ptr(v)
+		d.Listing.Address = v
+		d.Listing.AgentPhone = v
+		d.Listing.URL = v
+		d.Listing.Notes = v
 		d.Rooms[2].Name = v
 		d.Points[0].Label = v
 		d.Points[2].Label = "Sol"
@@ -187,7 +190,8 @@ func TestFormulaInjectionEscaped(t *testing.T) {
 		checks := map[string]string{
 			"address":     cell(t, rows, "fiche", "address", 4),
 			"agent_phone": cell(t, rows, "fiche", "agent_phone", 4),
-			"listing_url": cell(t, rows, "fiche", "listing_url", 4),
+			"url":         cell(t, rows, "fiche", "url", 4),
+			"notes":       cell(t, rows, "fiche", "notes", 4),
 			"pièce":       cell(t, rows, "note", want, 1),
 			"point":       cell(t, rows, "note", want, 2),
 			"constat":     cell(t, rows, "constat", "Sol", 4),

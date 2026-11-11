@@ -22,7 +22,6 @@ export class RoomsTabComponent {
 
   private readonly state = this.sync.state;
   protected readonly code = computed(() => this.state()?.visit.code ?? '');
-  protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
   protected readonly packingList = computed(() => this.state()?.visit.packing_list.trim() ?? '');
 
   /** Pièces visibles par position, avec les points remplis (ma note, N/A compris, ou valeur partagée). */

@@ -1,21 +1,16 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { SyncService } from '../../core/sync.service';
 
-const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
-
-/** État de la synchronisation : à jour, éléments en attente ou hors ligne. */
+/** État de la synchronisation : envoi en cours, à jour ou erreur de mise à jour. */
 @Component({
   selector: 'app-sync-indicator',
   imports: [MatIconModule],
   template: `
     <div class="sync" data-test="sync-indicator">
-      <mat-icon [svgIcon]="icon()" />
-      <span data-test="sync-label">{{ label() }}</span>
+      <mat-icon [svgIcon]="status().sending ? 'sync' : 'cloud_done'" />
+      <span data-test="sync-label">{{ status().sending ? 'Envoi…' : 'Synchronisé' }}</span>
     </div>
-    @if (pendingText()) {
-      <div class="detail" data-test="sync-pending">{{ pendingText() }}</div>
-    }
     @if (status().error) {
       <div class="detail error" role="alert" data-test="sync-error">{{ status().error }}</div>
     }
@@ -28,24 +23,4 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
 })
 export class SyncIndicatorComponent {
   protected readonly status = inject(SyncService).status;
-
-  private readonly pending = computed(() => this.status().pendingOps + this.status().pendingPhotos);
-  private readonly pendingLabel = computed(
-    () =>
-      `${plural(this.status().pendingOps, 'modification', 'modifications')} et ` +
-      `${plural(this.status().pendingPhotos, 'photo', 'photos')} en attente`,
-  );
-
-  protected readonly icon = computed(() => {
-    if (!this.status().online) return 'cloud_off';
-    return this.pending() === 0 ? 'cloud_done' : 'sync';
-  });
-  protected readonly label = computed(() => {
-    if (!this.status().online) return 'Hors ligne';
-    return this.pending() === 0 ? 'Synchronisé' : this.pendingLabel();
-  });
-  /** Hors ligne, les éléments en attente restent signalés sous le libellé. */
-  protected readonly pendingText = computed(() =>
-    !this.status().online && this.pending() > 0 ? this.pendingLabel() : '',
-  );
 }

@@ -12,7 +12,7 @@ import (
 
 // registerExportRoutes ajoute la route d'export au sous-routeur /api.
 func (h *handlers) registerExportRoutes(api *mux.Router) {
-	api.HandleFunc("/visits/{code}/export.csv", h.exportCSV).Methods(http.MethodGet)
+	api.HandleFunc("/listings/{id}/visit/export.csv", h.exportCSV).Methods(http.MethodGet)
 }
 
 func (h *handlers) exportCSV(w http.ResponseWriter, r *http.Request) {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/mgarnier-home/visite/model"
 )
@@ -28,7 +27,7 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 	}
 	defer tx.Rollback()
 
-	if err := readVisitInfo(ctx, tx, code, device, &st); err != nil {
+	if err := readVisitInfo(ctx, tx, code, &st); err != nil {
 		return st, err
 	}
 	if err := tx.QueryRowContext(ctx,
@@ -93,11 +92,10 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 		FROM shared_values sv
 		LEFT JOIN participants pa ON pa.visit_code = ? AND pa.device_id = sv.device_id
 		WHERE sv.seq > ? AND sv.target_id IN (
-			SELECT ? -- notes de la visite
-			UNION SELECT id FROM visit_rooms WHERE visit_code = ?
+			SELECT id FROM visit_rooms WHERE visit_code = ?
 			UNION SELECT p.id FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = ?
 			UNION SELECT q.id FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = ?)
-		ORDER BY sv.target_id, sv.field`, code, since, code, code, code, code); err != nil {
+		ORDER BY sv.target_id, sv.field`, code, since, code, code, code); err != nil {
 		return st, err
 	}
 
@@ -141,19 +139,13 @@ func (s *Store) State(ctx context.Context, code, device string, since int64) (mo
 	return st, nil
 }
 
-// readVisitInfo remplit Seq et Visit (fiche, clôture, liste de départ, participants).
-func readVisitInfo(ctx context.Context, tx *sql.Tx, code, device string, st *model.VisitState) error {
-	var creator string
-	var closedAt sql.NullString
-	f := &st.Visit.Fiche
+// readVisitInfo remplit Seq et Visit (liste de départ, participants).
+func readVisitInfo(ctx context.Context, tx *sql.Tx, code string, st *model.VisitState) error {
 	err := tx.QueryRowContext(ctx,
-		`SELECT seq, creator_device_id, created_at, closed_at, packing_list,
-			(SELECT COUNT(*) FROM participants WHERE visit_code = visits.code), `+strings.Join(ficheColumns, ", ")+`
+		`SELECT seq, created_at, packing_list,
+			(SELECT COUNT(*) FROM participants WHERE visit_code = visits.code)
 		 FROM visits WHERE code = ?`, code).Scan(
-		&st.Seq, &creator, &st.Visit.CreatedAt, &closedAt, &st.Visit.PackingList, &st.Visit.Participants,
-		&f.Address, &f.PriceEUR, &f.LivingAreaM2, &f.FloorAreaM2, &f.LandAreaM2, &f.VisitAt,
-		&f.AgentName, &f.AgentPhone, &f.AgentEmail, &f.ConstructionYear, &f.DPEEnergy, &f.DPEGES,
-		&f.RoomsCount, &f.BedroomsCount, &f.ListingURL, &f.HeatingType)
+		&st.Seq, &st.Visit.CreatedAt, &st.Visit.PackingList, &st.Visit.Participants)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -161,10 +153,6 @@ func readVisitInfo(ctx context.Context, tx *sql.Tx, code, device string, st *mod
 		return err
 	}
 	st.Visit.Code = code
-	st.Visit.IsCreator = creator == device
-	if closedAt.Valid {
-		st.Visit.ClosedAt = &closedAt.String
-	}
 	return nil
 }
 

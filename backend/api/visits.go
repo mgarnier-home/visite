@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 
-	"github.com/mgarnier-home/visite/model"
 	"github.com/mgarnier-home/visite/ops"
 	"github.com/mgarnier-home/visite/store"
 )
@@ -15,14 +15,12 @@ import (
 // maxOpsPerBatch est le nombre maximal d'opérations par lot.
 const maxOpsPerBatch = 500
 
-// registerVisitRoutes ajoute les routes des visites au sous-routeur /api.
+// registerVisitRoutes ajoute les routes des visites ({id} : id de l'annonce) au sous-routeur /api.
 func (h *handlers) registerVisitRoutes(api *mux.Router) {
-	api.HandleFunc("/visits", h.createVisit).Methods(http.MethodPost)
-	api.HandleFunc("/visits/{code}/exists", h.exists).Methods(http.MethodGet)
-	api.HandleFunc("/visits/{code}/join", h.join).Methods(http.MethodPost)
-	api.HandleFunc("/visits/{code}", h.state).Methods(http.MethodGet)
-	api.HandleFunc("/visits/{code}/changes", h.changes).Methods(http.MethodGet)
-	api.HandleFunc("/visits/{code}/ops", h.applyOps).Methods(http.MethodPost)
+	api.HandleFunc("/listings/{id}/visit", h.state).Methods(http.MethodGet)
+	api.HandleFunc("/listings/{id}/visit/changes", h.changes).Methods(http.MethodGet)
+	api.HandleFunc("/listings/{id}/visit/join", h.join).Methods(http.MethodPost)
+	api.HandleFunc("/listings/{id}/visit/ops", h.applyOps).Methods(http.MethodPost)
 }
 
 // internalError journalise l'erreur et répond 500 avec un message générique.
@@ -42,11 +40,11 @@ func requireDevice(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return device, ok
 }
 
-// requireCode renvoie le code de visite de l'URL, ou répond 400.
+// requireCode renvoie l'id d'annonce de l'URL (le code de la visite), ou répond 400.
 func requireCode(w http.ResponseWriter, r *http.Request) (string, bool) {
-	code := mux.Vars(r)["code"]
-	if !model.ValidCode(code) {
-		writeError(w, http.StatusBadRequest, "code de visite invalide")
+	code := strings.ToLower(mux.Vars(r)["id"])
+	if !uuidRe.MatchString(code) {
+		writeError(w, http.StatusBadRequest, "identifiant d'annonce invalide")
 		return "", false
 	}
 	return code, true
@@ -81,59 +79,6 @@ func (h *handlers) requireParticipant(w http.ResponseWriter, r *http.Request) (c
 		return "", "", false
 	}
 	return code, device, true
-}
-
-func (h *handlers) exists(w http.ResponseWriter, r *http.Request) {
-	code, ok := requireCode(w, r)
-	if !ok {
-		return
-	}
-	exists, err := h.store.VisitExists(r.Context(), code)
-	if err != nil {
-		h.internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"exists": exists})
-}
-
-func (h *handlers) createVisit(w http.ResponseWriter, r *http.Request) {
-	device, ok := requireDevice(w, r)
-	if !ok {
-		return
-	}
-	var req struct {
-		Code               string      `json:"code"`
-		Fiche              model.Fiche `json:"fiche"`
-		ExcludedSectionIDs []string    `json:"excluded_section_ids"`
-	}
-	if !decodeBody(w, r, &req) {
-		return
-	}
-	if !model.ValidCode(req.Code) {
-		writeError(w, http.StatusBadRequest, "code de visite invalide")
-		return
-	}
-	err := h.store.CreateVisitExcluding(r.Context(), req.Code, req.Fiche, device, h.now(), req.ExcludedSectionIDs)
-	switch {
-	case errors.Is(err, store.ErrInvalidExcluded):
-		writeError(w, http.StatusBadRequest, "sections exclues invalides")
-		return
-	case errors.Is(err, model.ErrInvalid):
-		writeError(w, http.StatusBadRequest, "fiche invalide")
-		return
-	case errors.Is(err, store.ErrConflict):
-		writeError(w, http.StatusConflict, "ce code de visite existe déjà")
-		return
-	case err != nil:
-		h.internalError(w, err)
-		return
-	}
-	st, err := h.store.State(r.Context(), req.Code, device, 0)
-	if err != nil {
-		h.internalError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, st)
 }
 
 func (h *handlers) join(w http.ResponseWriter, r *http.Request) {

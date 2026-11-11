@@ -1,0 +1,84 @@
+<header class="top">
+  <button mat-icon-button type="button" aria-label="Annuler l'ajout" data-test="back" [disabled]="busy() || saved()" (click)="back()"><mat-icon svgIcon="arrow_back" /></button>
+  <div class="heading">
+    <h1>Vérifier les infos</h1>
+    <span data-test="source">{{ sourceLine() }}</span>
+  </div>
+</header>
+
+@if (loadError()) {
+  <p class="error" role="alert" data-test="load-error">Impossible de charger l'annonce</p>
+} @else if (listing(); as l) {
+  <main>
+    @if (manual()) {
+      <div class="banner" role="status" data-test="manual-banner">
+        Ce site n'est pas lu automatiquement. Le titre a été repris du texte partagé ; complète le reste à la main.
+      </div>
+    }
+
+    <section>
+      <h2>{{ l.photos.length ? 'Photos (' + l.photos.length + ', copiées sur le serveur)' : 'Aucune photo' }}</h2>
+      @if (l.photos.length) {
+        <div class="photos">
+          @for (p of l.photos; track p.id) {
+            <img [src]="photo(p.id)" alt="" loading="lazy" />
+          }
+        </div>
+      }
+    </section>
+
+    <section>
+      <h2>Caractéristiques</h2>
+      <div class="grid">
+        @for (f of texts; track f.key) {
+          <label class="field" [class.wide]="f.key === 'title'">
+            <span>{{ f.label }}</span>
+            <input [attr.data-test]="'field-' + f.key" placeholder="Non indiqué" [value]="values()[f.key]" (input)="set(f.key, $event)" />
+          </label>
+        }
+        @for (f of numbers; track f.key) {
+          <label class="field">
+            <span>{{ f.label }}</span>
+            <input [appNumeric]="f.mode!" [attr.data-test]="'field-' + f.key" placeholder="Non indiqué" [value]="values()[f.key]" (input)="set(f.key, $event)" />
+          </label>
+        }
+      </div>
+      <span class="sub">Équipements</span>
+      <div class="chips">
+        @for (e of featureDefs; track e[0]) {
+          <button type="button" class="chip" [attr.data-test]="'feature-' + e[0]" [class.on]="features().includes(e[0])"
+            [attr.aria-pressed]="features().includes(e[0])" (click)="toggle(e[0])">{{ e[1] }}</button>
+        }
+      </div>
+    </section>
+
+    @if (l.description) {
+      <section>
+        <h2>Description de l'annonce</h2>
+        <p class="description">{{ l.description }}</p>
+      </section>
+    }
+
+    <section>
+      <h2>Statut de départ</h2>
+      <div class="segments" role="radiogroup" aria-label="Statut de départ">
+        @for (s of start; track s.status) {
+          <button type="button" role="radio" [attr.data-test]="'status-' + s.status" [attr.aria-checked]="status() === s.status"
+            [class.on]="status() === s.status" (click)="status.set(s.status)">{{ s.label }}</button>
+        }
+      </div>
+      @if (status() === 'planned') {
+        <app-date-time-input label="Visite planifiée" [ngModel]="visitAt()" (ngModelChange)="setVisit($event)" />
+      }
+    </section>
+
+    @if (saveError()) {
+      <p class="error" role="alert" data-test="save-error">{{ saveError() }}</p>
+    }
+  </main>
+
+  <footer>
+    <button mat-stroked-button type="button" data-test="cancel" [disabled]="busy() || saved()" (click)="cancel()">Annuler</button>
+    <button mat-flat-button type="button" data-test="save" [disabled]="!canSave()" (click)="save()">Ajouter à la liste</button>
+  </footer>
+}

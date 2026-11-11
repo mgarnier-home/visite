@@ -24,8 +24,6 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${port}`,
-    // le service worker est désactivé : le hors-ligne repose sur la file IndexedDB de l'appli
-    serviceWorkers: 'block',
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Pixel 7'] } }],

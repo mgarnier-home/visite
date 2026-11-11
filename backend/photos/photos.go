@@ -23,6 +23,8 @@ var ErrBadPath = errors.New("chemin de photo invalide")
 type Store interface {
 	Put(rel string, r io.Reader) error
 	Open(rel string) (io.ReadCloser, error)
+	// RemoveAll supprime le fichier ou le dossier ; sans effet s'il n'existe pas.
+	RemoveAll(rel string) error
 }
 
 // FS implémente Store sur le système de fichiers, sous Root.
@@ -76,6 +78,15 @@ func (f FS) Open(rel string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return os.Open(full)
+}
+
+// RemoveAll supprime le fichier ou le dossier ; sans effet s'il n'existe pas.
+func (f FS) RemoveAll(rel string) error {
+	full, err := f.resolve(rel)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(full)
 }
 
 // PhotoPath construit le chemin relatif d'une photo ; dirName vide : photo globale.

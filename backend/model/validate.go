@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"slices"
-	"strings"
 )
 
 // ErrInvalid est enveloppée par toutes les erreurs de validation.
@@ -17,11 +15,6 @@ var ErrInvalid = errors.New("invalid")
 func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 }
-
-var codeRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$`)
-
-// ValidCode indique si le code de visite est acceptable.
-func ValidCode(code string) bool { return codeRe.MatchString(code) }
 
 // Validate vérifie la cohérence du modèle de visite.
 func (t Template) Validate() error {
@@ -87,35 +80,6 @@ func claimID(seen map[string]bool, what, id string) error {
 	return nil
 }
 
-var dpeLetters = []string{"A", "B", "C", "D", "E", "F", "G"}
-
-// Validate vérifie les champs de la fiche (seule l'adresse est obligatoire).
-func (f Fiche) Validate() error {
-	if strings.TrimSpace(f.Address) == "" {
-		return invalid("adresse obligatoire")
-	}
-	for name, v := range map[string]*float64{
-		"price_eur": f.PriceEUR, "living_area_m2": f.LivingAreaM2,
-		"floor_area_m2": f.FloorAreaM2, "land_area_m2": f.LandAreaM2,
-	} {
-		if v != nil && (*v < 0 || math.IsNaN(*v) || math.IsInf(*v, 0)) {
-			return invalid("%s doit être un nombre >= 0", name)
-		}
-	}
-	for name, v := range map[string]*string{"dpe_energy": f.DPEEnergy, "dpe_ges": f.DPEGES} {
-		if v != nil && !slices.Contains(dpeLetters, *v) {
-			return invalid("%s doit être une lettre de A à G", name)
-		}
-	}
-	if f.RoomsCount != nil && *f.RoomsCount < 0 {
-		return invalid("rooms_count doit être >= 0")
-	}
-	if f.BedroomsCount != nil && (*f.BedroomsCount < 0 || *f.BedroomsCount > 20) {
-		return invalid("bedrooms_count doit être entre 0 et 20")
-	}
-	return nil
-}
-
 // TargetKind désigne le type de cible d'une valeur partagée.
 type TargetKind int
 
@@ -123,7 +87,6 @@ const (
 	TargetPoint TargetKind = iota
 	TargetQuestion
 	TargetRoom
-	TargetVisit // la visite elle-même : l'id de la cible est son code
 )
 
 // ValidSharedValue vérifie qu'une valeur partagée est permise pour la cible.
@@ -177,7 +140,7 @@ func ValidSharedValue(target TargetKind, p *Point, field string, raw json.RawMes
 			return invalid("%q doit être un texte", field)
 		}
 		return nil
-	case (target == TargetRoom || target == TargetVisit) && field == "notes":
+	case target == TargetRoom && field == "notes":
 		var s string
 		if err := json.Unmarshal(raw, &s); err != nil {
 			return invalid("%q doit être un texte", field)

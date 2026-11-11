@@ -7,14 +7,14 @@ import (
 
 func TestExportCSV(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
+	a := createVisit(t, router, "a", devA)
 
-	rec := do(t, router, "GET", "/api/visits/maison-a/export.csv?d="+devA, "", "")
+	rec := do(t, router, "GET", "/api/listings/"+a+"/visit/export.csv?d="+devA, "", "")
 	wantCode(t, rec, 200)
 	if ct := rec.Header().Get("Content-Type"); ct != "text/csv; charset=utf-8" {
 		t.Fatalf("Content-Type = %q", ct)
 	}
-	if cd := rec.Header().Get("Content-Disposition"); cd != `attachment; filename="maison-a.csv"` {
+	if cd := rec.Header().Get("Content-Disposition"); cd != `attachment; filename="`+a+`.csv"` {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 	body := rec.Body.String()
@@ -25,14 +25,14 @@ func TestExportCSV(t *testing.T) {
 
 func TestExportTSV(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
+	a := createVisit(t, router, "a", devA)
 
-	rec := do(t, router, "GET", "/api/visits/maison-a/export.csv?sep=tab", devA, "")
+	rec := do(t, router, "GET", "/api/listings/"+a+"/visit/export.csv?sep=tab", devA, "")
 	wantCode(t, rec, 200)
 	if ct := rec.Header().Get("Content-Type"); ct != "text/tab-separated-values; charset=utf-8" {
 		t.Fatalf("Content-Type = %q", ct)
 	}
-	if cd := rec.Header().Get("Content-Disposition"); cd != `attachment; filename="maison-a.tsv"` {
+	if cd := rec.Header().Get("Content-Disposition"); cd != `attachment; filename="`+a+`.tsv"` {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 	if !strings.HasPrefix(rec.Body.String(), "visite\tpièce\t") {
@@ -42,8 +42,8 @@ func TestExportTSV(t *testing.T) {
 
 func TestExportErrors(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
-	wantCode(t, do(t, router, "GET", "/api/visits/maison-a/export.csv", "", ""), 400)
-	wantCode(t, do(t, router, "GET", "/api/visits/maison-a/export.csv", devC, ""), 403)
-	wantCode(t, do(t, router, "GET", "/api/visits/inconnue-x/export.csv", devA, ""), 404)
+	a := createVisit(t, router, "a", devA)
+	wantCode(t, do(t, router, "GET", "/api/listings/"+a+"/visit/export.csv", "", ""), 400)
+	wantCode(t, do(t, router, "GET", "/api/listings/"+a+"/visit/export.csv", devC, ""), 403)
+	wantCode(t, do(t, router, "GET", "/api/listings/"+unknownID+"/visit/export.csv", devA, ""), 404)
 }

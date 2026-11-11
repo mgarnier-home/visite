@@ -15,18 +15,27 @@ export interface TemplatePoint {
 }
 export interface TemplateQuestion { id: string; text: string; position: number; important: boolean }
 
-export interface Fiche {
-  address: string; price_eur: number | null; living_area_m2: number | null;
-  floor_area_m2: number | null; land_area_m2: number | null; visit_at: string | null;
-  agent_name: string | null; agent_phone: string | null; agent_email: string | null;
-  construction_year: number | null; dpe_energy: string | null; dpe_ges: string | null;
-  rooms_count: number | null; bedrooms_count: number | null; listing_url: string | null;
-  heating_type: string | null;
+export type ListingStatus = 'contact' | 'mail' | 'planned' | 'done' | 'dropped';
+export type ListingSource = 'bienici' | 'manual' | string;
+export interface ListingPhoto { id: string; position: number }
+/** Annonce suivie ; les champs de ListingData sont aplatis dans l'objet. */
+export interface Listing {
+  id: string; source: ListingSource; url: string; status: ListingStatus;
+  created_at: string; mail_sent_at: string | null; visit_at: string | null;
+  visited_at: string | null; fetched_at: string | null; removed_at: string | null;
+  fetch_error: string; address: string; notes: string;
+  title: string; property_type: string; price_eur: number | null;
+  living_area_m2: number | null; land_area_m2: number | null;
+  rooms: number | null; bedrooms: number | null; bathrooms: number | null;
+  shower_rooms: number | null; toilets: number | null; parking: number | null;
+  floor: number | null; construction_year: number | null;
+  dpe: string; ges: string; heating: string; city: string; postal_code: string;
+  description: string; agency: string; agent_phone: string; agent_email: string;
+  features: string[]; photos: ListingPhoto[];
 }
 
 export interface VisitInfo {
-  code: string; is_creator: boolean; created_at: string; closed_at: string | null;
-  fiche: Fiche; packing_list: string; participants: number;
+  code: string; created_at: string; packing_list: string; participants: number;
 }
 export interface Room {
   id: string; name: string; dir_name: string; kind: SectionKind; position: number; hidden: boolean;
@@ -53,21 +62,15 @@ export interface VisitState {
 }
 
 export type OpType = 'add_room' | 'rename_room' | 'hide_room' | 'add_point' | 'add_question'
-  | 'set_rating' | 'set_comment' | 'set_shared' | 'set_fiche' | 'close_visit';
+  | 'set_rating' | 'set_comment' | 'set_shared';
 export interface Op { op_id: string; type: OpType; client_ts: number; payload: object }
 export interface OpResult {
   op_id: string; result: 'applied' | 'duplicate' | 'rejected';
-  reason?: 'closed' | 'forbidden' | 'not_found' | 'invalid';
+  reason?: 'forbidden' | 'not_found' | 'invalid';
 }
 export interface OpsResponse { seq: number; results: OpResult[] }
-/** Corps de POST /api/visits/{code}/ops. */
+/** Corps de POST /api/listings/{id}/visit/ops. */
 export interface OpsRequest { ops: Op[] }
 
-export interface CreateVisitRequest {
-  code: string; fiche: Fiche;
-  /** Identifiants des sections `room` décochées ; omis si le modèle n'a pas pu être chargé. */
-  excluded_section_ids?: string[];
-}
 export interface JoinResponse { number: number }
-export interface ExistsResponse { exists: boolean }
 export interface ErrorResponse { error: string }

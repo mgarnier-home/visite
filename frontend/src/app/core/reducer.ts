@@ -1,5 +1,5 @@
 import {
-  Comment, Fiche, Op, Point, Question, Rating, Room, SharedField, SharedValue, VisitState,
+  Comment, Op, Point, Question, Rating, Room, SharedField, SharedValue, VisitState,
 } from './api.types';
 
 const GLOBAL_NOTE_LABEL = 'Note globale de la pièce';
@@ -36,9 +36,8 @@ export function applyOp(state: VisitState, op: Op): VisitState {
     }
     case 'set_shared': {
       const id = p['target_id'];
-      // cible : la visite elle-même (ses notes, par son code), une pièce, un point ou une question
-      const known = id === state.visit.code || hasRoom(id)
-        || state.points.some((x) => x.id === id) || state.questions.some((q) => q.id === id);
+      // cible : une pièce, un point ou une question
+      const known = hasRoom(id) || state.points.some((x) => x.id === id) || state.questions.some((q) => q.id === id);
       if (!known) return state;
       const sv: SharedValue = {
         target_id: id, field: p['field'] as SharedField, value: p['value'],
@@ -46,12 +45,6 @@ export function applyOp(state: VisitState, op: Op): VisitState {
       };
       return { ...state, shared: upsert(state.shared, sv, (s) => s.target_id === id && s.field === sv.field) };
     }
-    case 'set_fiche': {
-      const fields = (p['fields'] ?? {}) as Partial<Fiche>;
-      return { ...state, visit: { ...state.visit, fiche: { ...state.visit.fiche, ...fields } } };
-    }
-    case 'close_visit':
-      return { ...state, visit: { ...state.visit, closed_at: new Date(op.client_ts).toISOString() } };
     case 'add_room': {
       const id: string = p['id'];
       if (hasRoom(id)) return state;

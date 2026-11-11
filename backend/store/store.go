@@ -16,7 +16,9 @@ var (
 	ErrNotFound        = errors.New("introuvable")
 	ErrConflict        = errors.New("conflit")
 	ErrVersionConflict = errors.New("version du modèle périmée")
-	ErrClosed          = errors.New("visite clôturée")
+
+	// ErrV1Database : la base porte la migration 003 de la v1, incompatible avec le schéma v2.
+	ErrV1Database = errors.New("base de la version 1 : repartir d'un dossier de données vide")
 )
 
 //go:embed migrations/*.sql
@@ -38,6 +40,10 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("ouverture de la base: %w", err)
 	}
 	s := &Store{db: db}
+	if err := s.refuseV1(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -46,6 +52,30 @@ func Open(path string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// refuseV1 refuse une base dont schema_migrations contient une migration inconnue de la v2.
+func (s *Store) refuseV1() error {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'schema_migrations'`).Scan(&n)
+	if err != nil || n == 0 {
+		return err
+	}
+	rows, err := s.db.Query(`SELECT name FROM schema_migrations`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if _, err := migrationsFS.ReadFile("migrations/" + name); err != nil {
+			return ErrV1Database
+		}
+	}
+	return rows.Err()
+}
 
 func (s *Store) migrate() error {
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

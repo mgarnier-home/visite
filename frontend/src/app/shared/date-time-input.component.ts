@@ -20,7 +20,7 @@ const timeValidator = (c: AbstractControl): ValidationErrors | null =>
 
 /**
  * Date (JJ/MM/AAAA, calendrier) et heure (HH:MM, 24 h) pour un instant RFC 3339 local.
- * Valeur : `string | null`. N'émet rien tant que la date ou l'heure est invalide.
+ * Valeur : `string | null`. Émet `null` tant que la date ou l'heure est invalide, pour que le parent ne garde pas l'ancienne valeur.
  */
 @Component({
   selector: 'app-date-time-input',
@@ -142,6 +142,7 @@ export class DateTimeInputComponent implements ControlValueAccessor, Validator {
   protected onTimeInput(event: Event): void {
     this.timeCtrl.setValue(normalizeTime((event.target as HTMLInputElement).value));
     this.onValidatorChange();
+    if (this.timeCtrl.invalid) this.emit();
   }
 
   protected onTimeBlur(): void {
@@ -160,11 +161,12 @@ export class DateTimeInputComponent implements ControlValueAccessor, Validator {
     this.dateTextBad = (text !== '' && !/^\d{2}\/\d{2}\/\d{4}$/.test(text)) || this.dateCtrl.hasError('matDatepickerParse');
     this.dateCtrl.updateValueAndValidity({ emitEvent: false });
     this.onValidatorChange();
+    if (this.dateCtrl.invalid) this.emit();
   }
 
-  /** Émet la valeur combinée ; rien si la date est illisible ou l'heure invalide. */
+  /** Émet la valeur combinée ; null si la date est illisible ou l'heure invalide. */
   protected emit(): void {
-    if (this.dateCtrl.invalid || this.timeCtrl.invalid) return;
+    if (this.dateCtrl.invalid || this.timeCtrl.invalid) return this.onChange(null);
     this.onChange(combineDateTime(this.dateCtrl.value, this.timeCtrl.value));
   }
 }

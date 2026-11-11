@@ -1,4 +1,4 @@
-import { Fiche, Point, SharedField, VisitState } from './api.types';
+import { Listing, Point, SharedField, VisitState } from './api.types';
 
 /** Frais de notaire estimés : 7,5 % du prix. */
 export function notaryFees(price: number): number {
@@ -6,13 +6,13 @@ export function notaryFees(price: number): number {
 }
 
 /** Prix au m² habitable ; null si prix ou surface manquants (ou surface ≤ 0). */
-export function pricePerM2(f: Fiche): number | null {
+export function pricePerM2(f: Pick<Listing, 'price_eur' | 'living_area_m2'>): number | null {
   if (f.price_eur === null || f.living_area_m2 === null || f.living_area_m2 <= 0) return null;
   return f.price_eur / f.living_area_m2;
 }
 
 /** Âge du bien à l'année donnée ; null si l'année de construction est inconnue. */
-export function buildingAge(f: Fiche, year: number): number | null {
+export function buildingAge(f: Pick<Listing, 'construction_year'>, year: number): number | null {
   return f.construction_year === null ? null : year - f.construction_year;
 }
 
@@ -45,8 +45,8 @@ export function totalWorks(s: VisitState): number {
 }
 
 /** Prix + frais de notaire + travaux ; null sans prix. */
-export function realPrice(s: VisitState): number | null {
-  const price = s.visit.fiche.price_eur;
+export function realPrice(s: VisitState, listing: Pick<Listing, 'price_eur'> | null): number | null {
+  const price = listing?.price_eur ?? null;
   if (price === null) return null;
   return price + notaryFees(price) + totalWorks(s);
 }

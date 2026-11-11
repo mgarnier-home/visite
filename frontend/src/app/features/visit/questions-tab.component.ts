@@ -17,7 +17,6 @@ export class QuestionsTabComponent {
   private readonly snack = inject(MatSnackBar);
 
   private readonly state = this.sync.state;
-  protected readonly closed = computed(() => !!this.state()?.visit.closed_at);
   protected readonly unaskedOnly = signal(false);
   /** Réponses saisies pas encore enregistrées, par identifiant de question. */
   private readonly drafts = signal<Readonly<Record<string, string>>>({});

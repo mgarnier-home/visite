@@ -6,11 +6,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/mgarnier-home/utils/buildinfo"
 	"github.com/mgarnier-home/utils/config"
 	"github.com/mgarnier-home/utils/logger"
 
 	"github.com/mgarnier-home/visite/api"
+	"github.com/mgarnier-home/visite/listings"
 	"github.com/mgarnier-home/visite/photos"
+	"github.com/mgarnier-home/visite/scrape"
 	"github.com/mgarnier-home/visite/seed"
 	"github.com/mgarnier-home/visite/store"
 	"github.com/mgarnier-home/visite/web"
@@ -44,7 +47,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st, Photos: photos.FS{Root: cfg.PhotosDir}, Web: web.Handler()})
+	photoStore := photos.FS{Root: cfg.PhotosDir}
+	scraper := &scrape.Client{HTTP: newHTTPClient(), UserAgent: "visite/" + buildinfo.Version}
+	svc := &listings.Service{Store: st, Photos: photoStore, Fetcher: scraper, Download: scraper.Get, Now: time.Now, Log: log}
+
+	router := api.NewRouter(api.Deps{Log: log, Now: time.Now, Store: st, Photos: photoStore, Listings: svc, Web: web.Handler()})
 
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	log.Infof("écoute sur %s", addr)

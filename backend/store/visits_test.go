@@ -28,15 +28,20 @@ func seededStore(t *testing.T) *Store {
 	return s
 }
 
-func mustCreate(t *testing.T, s *Store, code string, f model.Fiche, device string, now time.Time) {
+// mustCreate crée une annonce (URL tirée du nom) avec n chambres et inscrit l'appareil ;
+// renvoie son id, qui est le code de la visite.
+func mustCreate(t *testing.T, s *Store, name string, bedrooms *int, device string) string {
 	t.Helper()
-	if err := s.CreateVisit(context.Background(), code, f, device, now); err != nil {
-		t.Fatalf("CreateVisit(%s): %v", code, err)
+	l, err := s.CreateListing(context.Background(), model.Listing{
+		Source: "manual", URL: "https://example.test/" + name, ListingData: model.ListingData{Bedrooms: bedrooms},
+	}, nil, testNow)
+	if err != nil {
+		t.Fatalf("CreateListing(%s): %v", name, err)
 	}
-}
-
-func ficheWithBedrooms(n *int) model.Fiche {
-	return model.Fiche{Address: "1 rue des Lilas", BedroomsCount: n}
+	if _, err := s.Join(context.Background(), l.ID, device, testNow); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	return l.ID
 }
 
 type roomRow struct {
@@ -97,11 +102,9 @@ func TestCreateVisitCopiesTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	three := 3
-	if err := s.CreateVisit(ctx, "maison-1", ficheWithBedrooms(&three), "dev-1", testNow); err != nil {
-		t.Fatalf("CreateVisit: %v", err)
-	}
+	id := mustCreate(t, s, "maison", &three, "dev-1")
 
-	rooms := listRooms(t, s, "maison-1")
+	rooms := listRooms(t, s, id)
 	wantNames := []string{}
 	for _, sec := range tpl.Sections {
 		if sec.Kind == model.KindPerBedroom {
@@ -170,38 +173,27 @@ func TestCreateVisitCopiesTemplate(t *testing.T) {
 		}
 	}
 
-	var packing, ficheTS, created string
+	var packing, created string
 	var seq int64
-	if err := s.db.QueryRow(`SELECT packing_list, fiche_ts, created_at, seq FROM visits WHERE code = ?`, "maison-1").
-		Scan(&packing, &ficheTS, &created, &seq); err != nil {
+	if err := s.db.QueryRow(`SELECT packing_list, created_at, seq FROM visits WHERE code = ?`, id).
+		Scan(&packing, &created, &seq); err != nil {
 		t.Fatal(err)
 	}
 	if packing != tpl.PackingList || packing == "" {
 		t.Errorf("packing_list non copié: %q", packing)
 	}
-	if ficheTS != "{}" || seq != 1 || created != "2026-10-25T10:00:00Z" {
-		t.Errorf("fiche_ts=%q seq=%d created_at=%q", ficheTS, seq, created)
-	}
-	var addr string
-	var bed int
-	if err := s.db.QueryRow(`SELECT address, bedrooms_count FROM visits WHERE code = ?`, "maison-1").Scan(&addr, &bed); err != nil {
-		t.Fatal(err)
-	}
-	if addr != "1 rue des Lilas" || bed != 3 {
-		t.Errorf("fiche non persistée: %q %d", addr, bed)
+	if seq != 1 || created != "2026-10-25T10:00:00Z" {
+		t.Errorf("seq=%d created_at=%q", seq, created)
 	}
 }
 
 func TestCreateVisitWithoutBedrooms(t *testing.T) {
-	ctx := context.Background()
 	zero := 0
 	for name, n := range map[string]*int{"nil": nil, "zero": &zero} {
 		t.Run(name, func(t *testing.T) {
 			s := seededStore(t)
-			if err := s.CreateVisit(ctx, "maison-2", ficheWithBedrooms(n), "dev-1", testNow); err != nil {
-				t.Fatal(err)
-			}
-			for _, r := range listRooms(t, s, "maison-2") {
+			id := mustCreate(t, s, "maison", n, "dev-1")
+			for _, r := range listRooms(t, s, id) {
 				if r.kind == "per_bedroom" {
 					t.Errorf("chambre inattendue: %+v", r)
 				}
@@ -210,59 +202,12 @@ func TestCreateVisitWithoutBedrooms(t *testing.T) {
 	}
 }
 
-func TestCreateVisitRejectsTakenCode(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	if err := s.CreateVisit(ctx, "maison-3", ficheWithBedrooms(nil), "dev-1", testNow); err != nil {
-		t.Fatal(err)
-	}
-	err := s.CreateVisit(ctx, "maison-3", ficheWithBedrooms(nil), "dev-2", testNow)
-	if !errors.Is(err, ErrConflict) {
-		t.Fatalf("err = %v, veut ErrConflict", err)
-	}
-	ok, err := s.VisitExists(ctx, "maison-3")
-	if err != nil || !ok {
-		t.Errorf("VisitExists = %v, %v", ok, err)
-	}
-	ok, err = s.VisitExists(ctx, "autre-code")
-	if err != nil || ok {
-		t.Errorf("VisitExists(inconnu) = %v, %v", ok, err)
-	}
-}
-
-func TestCreateVisitRejectsBadCode(t *testing.T) {
-	s := seededStore(t)
-	err := s.CreateVisit(context.Background(), "A!", ficheWithBedrooms(nil), "dev-1", testNow)
-	if !errors.Is(err, model.ErrInvalid) {
-		t.Fatalf("err = %v, veut ErrInvalid", err)
-	}
-	err = s.CreateVisit(context.Background(), "maison-4", model.Fiche{}, "dev-1", testNow)
-	if !errors.Is(err, model.ErrInvalid) {
-		t.Fatalf("fiche sans adresse: err = %v, veut ErrInvalid", err)
-	}
-}
-
-func TestCreatorIsParticipantOne(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	if err := s.CreateVisit(ctx, "maison-5", ficheWithBedrooms(nil), "dev-1", testNow); err != nil {
-		t.Fatal(err)
-	}
-	n, err := s.ParticipantNumber(ctx, "maison-5", "dev-1")
-	if err != nil || n != 1 {
-		t.Fatalf("ParticipantNumber = %d, %v", n, err)
-	}
-	if _, err := s.ParticipantNumber(ctx, "maison-5", "inconnu"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("non participant: err = %v, veut ErrNotFound", err)
-	}
-}
-
 func TestJoinNumbersInOrder(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	mustCreate(t, s, "maison-6", ficheWithBedrooms(nil), "dev-1", testNow)
+	id := mustCreate(t, s, "maison-6", nil, "dev-1")
 	for i, dev := range []string{"dev-2", "dev-3"} {
-		n, err := s.Join(ctx, "maison-6", dev, testNow)
+		n, err := s.Join(ctx, id, dev, testNow)
 		if err != nil || n != i+2 {
 			t.Fatalf("Join(%s) = %d, %v, veut %d", dev, n, err, i+2)
 		}
@@ -272,20 +217,20 @@ func TestJoinNumbersInOrder(t *testing.T) {
 func TestJoinIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	mustCreate(t, s, "maison-7", ficheWithBedrooms(nil), "dev-1", testNow)
-	a, err := s.Join(ctx, "maison-7", "dev-2", testNow)
+	id := mustCreate(t, s, "maison-7", nil, "dev-1")
+	a, err := s.Join(ctx, id, "dev-2", testNow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.Join(ctx, "maison-7", "dev-2", testNow.Add(time.Hour))
+	b, err := s.Join(ctx, id, "dev-2", testNow.Add(time.Hour))
 	if err != nil || a != b {
 		t.Fatalf("Join deux fois = %d puis %d, %v", a, b, err)
 	}
-	c, err := s.Join(ctx, "maison-7", "dev-1", testNow)
+	c, err := s.Join(ctx, id, "dev-1", testNow)
 	if err != nil || c != 1 {
 		t.Errorf("le créateur rejoint = %d, veut 1", c)
 	}
-	if n, err := s.Join(ctx, "maison-7", "dev-3", testNow); err != nil || n != 3 {
+	if n, err := s.Join(ctx, id, "dev-3", testNow); err != nil || n != 3 {
 		t.Errorf("troisième appareil = %d, %v, veut 3", n, err)
 	}
 }
@@ -300,11 +245,11 @@ func TestJoinUnknownVisit(t *testing.T) {
 func TestTemplateChangeDoesNotAffectVisit(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	mustCreate(t, s, "maison-8", ficheWithBedrooms(nil), "dev-1", testNow)
+	id := mustCreate(t, s, "maison-8", nil, "dev-1")
 	count := func() int {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id
-			WHERE r.visit_code = ?`, "maison-8").Scan(&n); err != nil {
+			WHERE r.visit_code = ?`, id).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -326,7 +271,7 @@ func TestTemplateChangeDoesNotAffectVisit(t *testing.T) {
 		t.Errorf("points visite: %d avant, %d après", before, after)
 	}
 	var packing string
-	if err := s.db.QueryRow(`SELECT packing_list FROM visits WHERE code = ?`, "maison-8").Scan(&packing); err != nil {
+	if err := s.db.QueryRow(`SELECT packing_list FROM visits WHERE code = ?`, id).Scan(&packing); err != nil {
 		t.Fatal(err)
 	}
 	if packing == "autre" {
@@ -334,38 +279,10 @@ func TestTemplateChangeDoesNotAffectVisit(t *testing.T) {
 	}
 }
 
-func TestCreateVisitConcurrentSameCode(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	const n = 8
-	errs := make([]error, n)
-	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errs[i] = s.CreateVisit(ctx, "course", ficheWithBedrooms(nil), fmt.Sprintf("dev-%d", i), testNow)
-		}()
-	}
-	wg.Wait()
-	ok := 0
-	for _, err := range errs {
-		switch {
-		case err == nil:
-			ok++
-		case !errors.Is(err, ErrConflict):
-			t.Errorf("erreur inattendue: %v", err)
-		}
-	}
-	if ok != 1 {
-		t.Fatalf("%d créations réussies, veut exactement 1", ok)
-	}
-}
-
 func TestJoinConcurrentDistinctNumbers(t *testing.T) {
 	ctx := context.Background()
 	s := seededStore(t)
-	mustCreate(t, s, "course-join", ficheWithBedrooms(nil), "dev-0", testNow)
+	id := mustCreate(t, s, "course-join", nil, "dev-0")
 	const n = 10
 	nums := make([]int, n)
 	errs := make([]error, n)
@@ -374,7 +291,7 @@ func TestJoinConcurrentDistinctNumbers(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			nums[i], errs[i] = s.Join(ctx, "course-join", fmt.Sprintf("dev-%d", i+1), testNow)
+			nums[i], errs[i] = s.Join(ctx, id, fmt.Sprintf("dev-%d", i+1), testNow)
 		}()
 	}
 	wg.Wait()
@@ -438,7 +355,7 @@ func TestCreateVisitCopiesImportance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustCreate(t, s, "maison-1", ficheWithBedrooms(nil), "dev-1", testNow)
+	id := mustCreate(t, s, "maison-1", nil, "dev-1")
 	points := map[string]bool{"Note globale de la pièce": true} // libellé → important
 	questions := map[string]bool{}                              // texte → importante
 	for _, sec := range tpl.Sections {
@@ -452,9 +369,9 @@ func TestCreateVisitCopiesImportance(t *testing.T) {
 			questions[q.Text] = q.Important
 		}
 	}
-	check := func(what string, want map[string]bool, query string) {
+	check := func(what string, want map[string]bool, query string, args ...any) {
 		t.Helper()
-		rows, err := s.db.Query(query)
+		rows, err := s.db.Query(query, args...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -480,158 +397,7 @@ func TestCreateVisitCopiesImportance(t *testing.T) {
 		}
 	}
 	check("point", points, `SELECT p.label, p.important FROM visit_points p
-		JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = 'maison-1'`)
+		JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = ?`, id)
 	check("question", questions, `SELECT q.text, q.important FROM visit_questions q
-		JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = 'maison-1'`)
-}
-
-func TestCreateVisitExcludesSection(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	garage := sectionIDByName(t, tpl, "Garage")
-	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{garage}); err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range listRooms(t, s, "maison-x") {
-		if r.name == "Garage" {
-			t.Fatalf("la pièce Garage ne devait pas être créée")
-		}
-	}
-}
-
-func TestCreateVisitOtherQuestions(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	excl := []string{sectionIDByName(t, tpl, "Garage"), sectionIDByName(t, tpl, "Cuisine")}
-	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, excl); err != nil {
-		t.Fatal(err)
-	}
-	rooms := listRooms(t, s, "maison-x")
-	if len(rooms) < 2 || rooms[1].name != "Autres questions" {
-		t.Fatalf("pièces = %v, veut Autres questions en position 1", roomNames(rooms))
-	}
-	o := rooms[1]
-	if o.kind != "topic" || o.dirName != "autres-questions" || o.position != 1 {
-		t.Fatalf("pièce = %+v", o)
-	}
-	if pts := listPoints(t, s, o.id); len(pts) != 0 {
-		t.Fatalf("points = %v, veut aucun", pts)
-	}
-	for i, r := range rooms {
-		if r.position != i {
-			t.Errorf("position de %q = %d, veut %d", r.name, r.position, i)
-		}
-	}
-	got := listQuestionTexts(t, s, o.id)
-	want := []string{}
-	for _, name := range []string{"Cuisine", "Garage"} {
-		for _, sec := range tpl.Sections {
-			if sec.Name != name {
-				continue
-			}
-			for _, q := range sec.Questions {
-				if q.Important {
-					want = append(want, name+" : "+q.Text)
-				}
-			}
-		}
-	}
-	if len(want) != 5 || fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("questions = %q, veut %q", got, want)
-	}
-	var secondary int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM visit_questions WHERE room_id = ? AND important = 0`, o.id).Scan(&secondary); err != nil {
-		t.Fatal(err)
-	}
-	if secondary != 0 {
-		t.Errorf("%d questions secondaires dans « Autres questions », veut 0", secondary)
-	}
-	if got[0][:len("Cuisine : La cuisine est-elle vendue équipée ?")] != "Cuisine : La cuisine est-elle vendue équipée ?" {
-		t.Errorf("première question = %q", got[0])
-	}
-}
-
-func TestCreateVisitNoOtherQuestionsWhenNothingImportant(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	for i := range tpl.Sections {
-		if tpl.Sections[i].Name == "Garage" {
-			for j := range tpl.Sections[i].Questions {
-				tpl.Sections[i].Questions[j].Important = false
-			}
-		}
-	}
-	if _, err := s.SaveTemplate(ctx, tpl); err != nil {
-		t.Fatal(err)
-	}
-	tpl, _ = s.GetTemplate(ctx)
-	garage := sectionIDByName(t, tpl, "Garage")
-	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{garage}); err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range listRooms(t, s, "maison-x") {
-		if r.name == "Autres questions" || r.name == "Garage" {
-			t.Fatalf("pièce %q inattendue", r.name)
-		}
-	}
-}
-
-func TestCreateVisitAllRoomsExcluded(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	excl := []string{}
-	for _, sec := range tpl.Sections {
-		if sec.Kind == model.KindRoom {
-			excl = append(excl, sec.ID)
-		}
-	}
-	two := 2
-	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(&two), "dev-1", testNow, excl); err != nil {
-		t.Fatal(err)
-	}
-	rooms := listRooms(t, s, "maison-x")
-	want := []string{"Questions générales", "Autres questions", "Chambre 1", "Chambre 2", "Bilan"}
-	if fmt.Sprint(roomNames(rooms)) != fmt.Sprint(want) {
-		t.Fatalf("pièces = %q, veut %q", roomNames(rooms), want)
-	}
-	for i, r := range rooms {
-		if r.position != i {
-			t.Errorf("position de %q = %d, veut %d", r.name, r.position, i)
-		}
-	}
-}
-
-func TestCreateVisitDuplicateExcluded(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	g := sectionIDByName(t, tpl, "Garage")
-	if err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, []string{g, g}); err != nil {
-		t.Fatalf("doublon refusé : %v", err)
-	}
-}
-
-func TestCreateVisitBadExcluded(t *testing.T) {
-	ctx := context.Background()
-	s := seededStore(t)
-	tpl, _ := s.GetTemplate(ctx)
-	cases := map[string][]string{
-		"inconnu":             {"nope"},
-		"questions générales": {sectionIDByName(t, tpl, "Questions générales")},
-		"chambre":             {sectionIDByName(t, tpl, "Chambre")},
-		"bilan":               {sectionIDByName(t, tpl, "Bilan")},
-	}
-	for name, ids := range cases {
-		err := s.CreateVisitExcluding(ctx, "maison-x", ficheWithBedrooms(nil), "dev-1", testNow, ids)
-		if !errors.Is(err, model.ErrInvalid) || !errors.Is(err, ErrInvalidExcluded) {
-			t.Errorf("%s : err = %v, veut ErrInvalid et ErrInvalidExcluded", name, err)
-		}
-	}
-	if ok, _ := s.VisitExists(ctx, "maison-x"); ok {
-		t.Fatal("aucune visite ne doit être créée")
-	}
+		JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = ?`, id)
 }

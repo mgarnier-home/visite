@@ -30,10 +30,12 @@ func (s *Store) ExportData(ctx context.Context, code string) (export.Data, error
 	defer tx.Rollback()
 
 	var st model.VisitState
-	if err := readVisitInfo(ctx, tx, code, "", &st); err != nil {
+	if err := readVisitInfo(ctx, tx, code, &st); err != nil {
 		return d, err
 	}
-	d.Fiche = st.Visit.Fiche
+	if d.Listing, err = getListing(ctx, tx, code); err != nil {
+		return d, err
+	}
 	d.Participants = st.Visit.Participants
 
 	if d.Rooms, err = queryAll(ctx, tx, func(r *sql.Rows) (model.Room, error) {
@@ -77,11 +79,10 @@ func (s *Store) ExportData(ctx context.Context, code string) (export.Data, error
 		var v sharedRow
 		return v, r.Scan(&v.target, &v.field, &v.value)
 	}, `SELECT target_id, field, value FROM shared_values WHERE target_id IN (
-			SELECT ? -- notes de la visite
-			UNION SELECT id FROM visit_rooms WHERE visit_code = ?
+			SELECT id FROM visit_rooms WHERE visit_code = ?
 			UNION SELECT p.id FROM visit_points p JOIN visit_rooms r ON r.id = p.room_id WHERE r.visit_code = ?
 			UNION SELECT q.id FROM visit_questions q JOIN visit_rooms r ON r.id = q.room_id WHERE r.visit_code = ?)`,
-		code, code, code, code)
+		code, code, code)
 	if err != nil {
 		return d, err
 	}

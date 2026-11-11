@@ -2,20 +2,35 @@ import type { TemplatePage } from './features/template/template.page';
 import { Routes } from '@angular/router';
 
 export const routes: Routes = [
-  { path: '', loadComponent: () => import('./features/home/home.page').then((m) => m.HomePage) },
   {
-    path: 'template',
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/listings/listings.page').then((m) => m.ListingsPage),
+  },
+  {
+    path: 'modele',
     loadComponent: () => import('./features/template/template.page').then((m) => m.TemplatePage),
     canDeactivate: [(page: TemplatePage) => page.canLeave()],
   },
-  { path: 'new', loadComponent: () => import('./features/create/create.page').then((m) => m.CreatePage) },
   {
-    path: 'v/:code',
+    path: 'annonces/nouvelle',
+    loadComponent: () => import('./features/listings/add.page').then((m) => m.AddPage),
+  },
+  {
+    path: 'annonces/:id/verifier',
+    loadComponent: () => import('./features/listings/edit.page').then((m) => m.EditPage),
+  },
+  {
+    path: 'annonces/:id',
     loadComponent: () => import('./features/visit/visit-shell.page').then((m) => m.VisitShellPage),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'rooms' },
+      { path: '', pathMatch: 'full', redirectTo: 'annonce' },
       {
-        path: 'rooms',
+        path: 'annonce',
+        loadComponent: () => import('./features/listings/listing-tab.component').then((m) => m.ListingTabComponent),
+      },
+      {
+        path: 'pieces',
         loadComponent: () => import('./features/visit/rooms-tab.component').then((m) => m.RoomsTabComponent),
       },
       {
@@ -23,15 +38,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/visit/questions-tab.component').then((m) => m.QuestionsTabComponent),
       },
       {
-        path: 'fiche',
-        loadComponent: () => import('./features/visit/fiche-tab.component').then((m) => m.FicheTabComponent),
-      },
-      {
         path: 'bilan',
         loadComponent: () => import('./features/visit/summary-tab.component').then((m) => m.SummaryTabComponent),
       },
       {
-        path: 'room/:roomId',
+        path: 'piece/:roomId',
         loadComponent: () => import('./features/room/room.page').then((m) => m.RoomPage),
       },
     ],

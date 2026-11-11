@@ -1,0 +1,73 @@
+<div class="home" [class.desktop]="desktop()">
+  <header class="top">
+    <div class="title">
+      <h1>Visite</h1>
+      @if (!loading() && !error()) {
+        <span class="count" data-test="count">{{ tracked() }} {{ tracked() > 1 ? "annonces suivies" : "annonce suivie" }} · {{ dropped().length }} {{ dropped().length > 1 ? "écartées" : "écartée" }}</span>
+      }
+    </div>
+    <a mat-button routerLink="/modele">Modèle de visite</a>
+    <a mat-flat-button class="add" data-test="add" routerLink="/annonces/nouvelle">
+      <mat-icon svgIcon="add" />Ajouter une annonce
+    </a>
+  </header>
+
+  @if (loading()) {
+    <p class="empty" data-test="loading">Chargement…</p>
+  } @else if (error()) {
+    <p class="notice" data-test="load-error">Impossible de charger les annonces</p>
+    <button mat-stroked-button type="button" data-test="retry" (click)="load()">Réessayer</button>
+  } @else if (listings().length === 0) {
+    <p class="empty">Aucune annonce pour l'instant.</p>
+  }
+
+  <div class="groups">
+    @for (g of groups(); track g.status) {
+      @if (desktop() || g.items.length) {
+        <section class="group">
+          <h2 data-test="group-title"><span class="chip chip-{{ g.status }}">{{ g.label }}</span><span>{{ g.items.length }}</span></h2>
+          @for (l of g.items; track l.id) {
+            <ng-container [ngTemplateOutlet]="card" [ngTemplateOutletContext]="{ $implicit: l }" />
+          }
+        </section>
+      }
+    }
+  </div>
+
+  @if (dropped().length) {
+    <button type="button" class="dropped-toggle" data-test="dropped-toggle" [attr.aria-expanded]="showDropped()"
+      (click)="showDropped.set(!showDropped())">
+      <span>Écartées ({{ dropped().length }})</span>
+      <mat-icon [svgIcon]="'chevron_right'" [class.open]="showDropped()" />
+    </button>
+    @if (showDropped()) {
+      <div class="dropped">
+        @for (l of dropped(); track l.id) {
+          <ng-container [ngTemplateOutlet]="card" [ngTemplateOutletContext]="{ $implicit: l }" />
+        }
+      </div>
+    }
+  }
+</div>
+
+<ng-template #card let-l>
+  <a class="card" data-test="card" [routerLink]="['/annonces', l.id]">
+    <div class="photo">
+      @if (photo(l); as src) {
+        <img [src]="src" alt="" loading="lazy" />
+      } @else {
+        <mat-icon svgIcon="home" />
+      }
+      <span class="source">{{ source(l.source) }}</span>
+    </div>
+    <div class="body">
+      <span class="price">{{ price(l) }}</span>
+      <span>{{ specs(l) }}</span>
+      <span class="muted">{{ place(l) }}</span>
+      @if (l.removed_at) {
+        <span class="removed">Annonce retirée</span>
+      }
+      <span class="next" [class.strong]="l.status === 'planned'">{{ next(l) }}</span>
+    </div>
+  </a>
+</ng-template>

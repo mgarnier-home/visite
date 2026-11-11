@@ -4,13 +4,13 @@
   }
   @case ('network') {
     <main class="message" data-test="error">
-      <p>Il faut du réseau pour ouvrir cette visite la première fois</p>
+      <p>Il faut du réseau pour ouvrir cette visite</p>
       <a mat-stroked-button routerLink="/">Accueil</a>
     </main>
   }
   @case ('notfound') {
     <main class="message" data-test="error">
-      <p>Aucune visite avec ce code</p>
+      <p>Aucune annonce avec cet identifiant</p>
       <a mat-stroked-button routerLink="/">Accueil</a>
     </main>
   }
@@ -21,6 +21,12 @@
     </main>
   }
   @case ('ready') {
+    @if (deleted()) {
+      <main class="message" data-test="deleted">
+        <p>Cette annonce a été supprimée</p>
+        <a mat-stroked-button routerLink="/">Accueil</a>
+      </main>
+    } @else {
     <main class="visit">
       <header>
         <a mat-icon-button routerLink="/" aria-label="Accueil"><mat-icon svgIcon="home" /></a>
@@ -28,16 +34,9 @@
         <app-sync-indicator />
       </header>
 
-      @if (closed()) {
-        <div class="closed" role="status" data-test="closed-banner">
-          <mat-icon svgIcon="lock" />
-          Visite clôturée
-        </div>
-      }
-
-      <nav mat-tab-nav-bar [tabPanel]="panel">
+      <nav mat-tab-nav-bar mat-stretch-tabs [disablePagination]="true" [tabPanel]="panel">
         @for (t of tabs; track t.path) {
-          <a mat-tab-link [routerLink]="['/v', code(), t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive"
+          <a mat-tab-link [routerLink]="['/annonces', id(), t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive"
             [matBadge]="t.path === 'questions' ? unasked() : null" matBadgeSize="small" [matBadgeOverlap]="false"
             [matBadgeHidden]="t.path !== 'questions' || unasked() === 0">
             {{ t.label }}
@@ -48,5 +47,6 @@
         <router-outlet />
       </mat-tab-nav-panel>
     </main>
+    }
   }
 }

@@ -12,16 +12,16 @@ func TestNotaryFees(t *testing.T) {
 }
 
 func TestPricePerM2(t *testing.T) {
-	got := PricePerM2(Fiche{PriceEUR: ptr(300000.0), LivingAreaM2: ptr(120.0)})
+	got := PricePerM2(ptr(300000.0), ptr(120.0))
 	if got == nil || *got != 2500 {
 		t.Errorf("PricePerM2 = %v, want 2500", got)
 	}
-	for name, f := range map[string]Fiche{
-		"surface nulle":   {PriceEUR: ptr(300000.0), LivingAreaM2: ptr(0.0)},
-		"surface absente": {PriceEUR: ptr(300000.0)},
-		"prix absent":     {LivingAreaM2: ptr(120.0)},
+	for name, f := range map[string][2]*float64{
+		"surface nulle":   {ptr(300000.0), ptr(0.0)},
+		"surface absente": {ptr(300000.0), nil},
+		"prix absent":     {nil, ptr(120.0)},
 	} {
-		if got := PricePerM2(f); got != nil {
+		if got := PricePerM2(f[0], f[1]); got != nil {
 			t.Errorf("%s : PricePerM2 = %v, want nil", name, *got)
 		}
 	}

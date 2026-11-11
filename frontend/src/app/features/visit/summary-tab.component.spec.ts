@@ -1,26 +1,22 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient, ApiError } from '../../core/api.client';
 import { VisitState } from '../../core/api.types';
+import { CurrentListing } from '../../core/current-listing';
 import { SyncService } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
 import { SummaryTabComponent } from './summary-tab.component';
 
-function makeState(over: { creator?: boolean; closed?: boolean; unasked?: boolean; rated?: boolean } = {}): VisitState {
+function makeState(over: { unasked?: boolean; rated?: boolean } = {}): VisitState {
   const rated = over.rated ?? true;
   return {
     seq: 1,
     me: { number: 1 },
     visit: {
       code: 'maison-x',
-      is_creator: over.creator ?? true,
-      closed_at: over.closed ? 'x' : null,
-      fiche: { address: 'x', price_eur: 200000 },
     },
     rooms: [
       { id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false },
@@ -50,11 +46,9 @@ function makeState(over: { creator?: boolean; closed?: boolean; unasked?: boolea
 
 describe('SummaryTabComponent', () => {
   const state = signal<VisitState | null>(null);
-  const status = signal({ online: true, pendingOps: 0, pendingPhotos: 0, error: null as string | null });
-  const sync = { state, status, dispatch: vi.fn(), kick: vi.fn(), whenIdle: vi.fn() };
+  const sync = { state, dispatch: vi.fn(), whenIdle: vi.fn() };
   const api = { exportCsv: vi.fn() };
   const snack = { open: vi.fn() };
-  const dialog = { open: vi.fn() };
   const writeText = vi.fn();
 
   function setup(s = makeState()) {
@@ -73,8 +67,6 @@ describe('SummaryTabComponent', () => {
     vi.resetAllMocks();
     sync.dispatch.mockResolvedValue(undefined);
     sync.whenIdle.mockResolvedValue(undefined);
-    status.set({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
-    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     TestBed.configureTestingModule({
       imports: [SummaryTabComponent],
@@ -82,11 +74,11 @@ describe('SummaryTabComponent', () => {
         { provide: SyncService, useValue: sync },
         { provide: ApiClient, useValue: api },
         { provide: MatSnackBar, useValue: snack },
-        { provide: MatDialog, useValue: dialog },
         provideRouter([]),
         provideAppIcons(),
       ],
     });
+    TestBed.inject(CurrentListing).listing.set({ price_eur: 200000 } as never);
   });
 
   it('affiche les points du récapitulatif avec leur poids et mon score', () => {
@@ -130,7 +122,7 @@ describe('SummaryTabComponent', () => {
   it('alerte sur les questions non posées avec lien vers l\'onglet Questions, absente à 0', () => {
     const { el } = setup();
     expect(text(el, '[data-test=unasked]')).toContain('1 question non posée');
-    expect(el.querySelector('[data-test=unasked] a')?.getAttribute('href')).toBe('/v/maison-x/questions');
+    expect(el.querySelector('[data-test=unasked] a')?.getAttribute('href')).toBe('/annonces/maison-x/questions');
     expect(setup(makeState({ unasked: false })).el.querySelector('[data-test=unasked]')).toBeNull();
   });
 
@@ -187,7 +179,7 @@ describe('SummaryTabComponent', () => {
     }
   });
 
-  it('avant d\'exporter, lance une synchro et attend qu\'elle se termine', async () => {
+  it('avant d\'exporter, attend la fin des envois en cours', async () => {
     api.exportCsv.mockResolvedValue(new Blob(['a\tb']));
     writeText.mockResolvedValue(undefined);
     let idle!: () => void;
@@ -195,51 +187,11 @@ describe('SummaryTabComponent', () => {
     const { el } = setup();
     click(el, '[data-test=copy]');
     await flushAll();
-    expect(sync.kick).toHaveBeenCalled();
     expect(api.exportCsv).not.toHaveBeenCalled();
     idle();
     await flushAll();
     expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'tab');
     expect(snack.open).toHaveBeenCalledWith('Copié dans le presse-papiers', 'OK', expect.anything());
-  });
-
-  it('modifications encore en attente après la synchro : export fait, avec un avertissement', async () => {
-    api.exportCsv.mockResolvedValue(new Blob(['a\tb']));
-    writeText.mockResolvedValue(undefined);
-    status.set({ online: false, pendingOps: 2, pendingPhotos: 0, error: null });
-    const { el } = setup();
-    click(el, '[data-test=copy]');
-    await flushAll();
-    expect(writeText).toHaveBeenCalledWith('a\tb');
-    expect(snack.open).toHaveBeenCalledWith(expect.stringContaining('Copié dans le presse-papiers'), 'OK', expect.anything());
-    expect(snack.open).toHaveBeenCalledWith(
-      expect.stringContaining('Des modifications de cet appareil ne sont pas encore envoyées'), 'OK', expect.anything(),
-    );
-  });
-
-  it('synchro trop longue : l\'attente est bornée à 10 s, puis export avec avertissement', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      api.exportCsv.mockResolvedValue(new Blob(['x']));
-      URL.createObjectURL = vi.fn(() => 'blob:csv');
-      URL.revokeObjectURL = vi.fn();
-      const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-      sync.whenIdle.mockReturnValue(new Promise<void>(() => undefined));
-      status.set({ online: true, pendingOps: 0, pendingPhotos: 1, error: null });
-      const { el } = setup();
-      click(el, '[data-test=export]');
-      await vi.advanceTimersByTimeAsync(9_999);
-      expect(api.exportCsv).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1);
-      expect(api.exportCsv).toHaveBeenCalledWith('maison-x', 'semicolon');
-      expect(snack.open).toHaveBeenCalledWith(
-        expect.stringContaining('Des modifications de cet appareil ne sont pas encore envoyées'), 'OK', expect.anything(),
-      );
-      await vi.advanceTimersByTimeAsync(40_000);
-      spy.mockRestore();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('hors ligne : « Il faut du réseau pour exporter » pour l\'export et la copie', async () => {
@@ -252,33 +204,5 @@ describe('SummaryTabComponent', () => {
     expect(snack.open).toHaveBeenCalledTimes(2);
     expect(snack.open).toHaveBeenNthCalledWith(1, 'Il faut du réseau pour exporter', 'OK', expect.anything());
     expect(snack.open).toHaveBeenNthCalledWith(2, 'Il faut du réseau pour exporter', 'OK', expect.anything());
-  });
-
-  it('« Clôturer la visite » absent pour un non-créateur', () => {
-    expect(setup(makeState({ creator: false })).el.querySelector('[data-test=close]')).toBeNull();
-  });
-
-  it('« Clôturer la visite » demande confirmation puis dispatche close_visit', async () => {
-    const { el } = setup();
-    click(el, '[data-test=close]');
-    await flushAll();
-    expect(dialog.open).toHaveBeenCalled();
-    expect(sync.dispatch).toHaveBeenCalledWith('close_visit', {});
-  });
-
-  it('confirmation refusée : rien n\'est envoyé', async () => {
-    dialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-    const { el } = setup();
-    click(el, '[data-test=close]');
-    await flushAll();
-    expect(sync.dispatch).not.toHaveBeenCalled();
-  });
-
-  it('visite clôturée : clôture et notes désactivées, export et copie actifs', () => {
-    const { el } = setup(makeState({ closed: true }));
-    expect((el.querySelector('[data-test=close]') as HTMLButtonElement).disabled).toBe(true);
-    expect((el.querySelector('[data-test=export]') as HTMLButtonElement).disabled).toBe(false);
-    expect((el.querySelector('[data-test=copy]') as HTMLButtonElement).disabled).toBe(false);
-    expect((el.querySelector('app-point-card button') as HTMLButtonElement).disabled).toBe(true);
   });
 });

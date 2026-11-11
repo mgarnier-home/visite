@@ -40,7 +40,7 @@ func uploadPhoto(t *testing.T, router http.Handler, code, device string, f photo
 		_, _ = fw.Write(f.file)
 	}
 	_ = mw.Close()
-	req := httptest.NewRequest("POST", "/api/visits/"+code+"/photos", &buf)
+	req := httptest.NewRequest("POST", "/api/listings/"+code+"/visit/photos", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	if device != "" {
 		req.Header.Set("X-Device-Id", device)
@@ -52,7 +52,7 @@ func uploadPhoto(t *testing.T, router http.Handler, code, device string, f photo
 
 func firstRoomID(t *testing.T, router http.Handler, code, device string) string {
 	t.Helper()
-	rec := do(t, router, "GET", "/api/visits/"+code, device, "")
+	rec := do(t, router, "GET", "/api/listings/"+code+"/visit", device, "")
 	var st model.VisitState
 	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil || len(st.Rooms) == 0 {
 		t.Fatalf("état illisible : %v", err)
@@ -66,11 +66,11 @@ func validForm(roomID string) photoForm {
 
 func TestPhotoUploadAndDownload(t *testing.T) {
 	router, root := newTestRouterWithPhotos(t)
-	createVisit(t, router, "maison-a", devA)
-	room := firstRoomID(t, router, "maison-a", devA)
+	a := createVisit(t, router, "a", devA)
+	room := firstRoomID(t, router, a, devA)
 	form := validForm(room)
 
-	rec := uploadPhoto(t, router, "maison-a", devA, form)
+	rec := uploadPhoto(t, router, a, devA, form)
 	wantCode(t, rec, http.StatusCreated)
 	var p model.Photo
 	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
@@ -91,10 +91,10 @@ func TestPhotoUploadAndDownload(t *testing.T) {
 	}
 
 	// Renvoi du même id : 200.
-	wantCode(t, uploadPhoto(t, router, "maison-a", devA, form), http.StatusOK)
+	wantCode(t, uploadPhoto(t, router, a, devA, form), http.StatusOK)
 
 	// Relecture identique, via ?d=.
-	get := do(t, router, "GET", "/api/visits/maison-a/photos/"+testPhotoID+"?d="+devA, "", "")
+	get := do(t, router, "GET", "/api/listings/"+a+"/visit/photos/"+testPhotoID+"?d="+devA, "", "")
 	wantCode(t, get, http.StatusOK)
 	if ct := get.Header().Get("Content-Type"); ct != "image/jpeg" {
 		t.Fatalf("Content-Type = %q", ct)
@@ -106,14 +106,14 @@ func TestPhotoUploadAndDownload(t *testing.T) {
 
 func TestPhotoGlobalAndInState(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
+	a := createVisit(t, router, "a", devA)
 	form := validForm("")
-	rec := uploadPhoto(t, router, "maison-a", devA, form)
+	rec := uploadPhoto(t, router, a, devA, form)
 	wantCode(t, rec, http.StatusCreated)
 	if !strings.Contains(rec.Body.String(), `"room_id":null`) {
 		t.Fatalf("corps = %s", rec.Body.String())
 	}
-	st := do(t, router, "GET", "/api/visits/maison-a", devA, "")
+	st := do(t, router, "GET", "/api/listings/"+a+"/visit", devA, "")
 	if !strings.Contains(st.Body.String(), testPhotoID) {
 		t.Fatal("photo absente de l'état")
 	}
@@ -121,88 +121,80 @@ func TestPhotoGlobalAndInState(t *testing.T) {
 
 func TestPhotoUploadErrors(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
-	createVisit(t, router, "maison-b", devB)
-	room := firstRoomID(t, router, "maison-a", devA)
+	a := createVisit(t, router, "a", devA)
+	b := createVisit(t, router, "b", devB)
+	room := firstRoomID(t, router, a, devA)
 
 	t.Run("appareil absent", func(t *testing.T) {
-		wantCode(t, uploadPhoto(t, router, "maison-a", "", validForm(room)), 400)
+		wantCode(t, uploadPhoto(t, router, a, "", validForm(room)), 400)
 	})
 	t.Run("non participant", func(t *testing.T) {
-		wantCode(t, uploadPhoto(t, router, "maison-a", devC, validForm(room)), 403)
+		wantCode(t, uploadPhoto(t, router, a, devC, validForm(room)), 403)
 	})
 	t.Run("visite inconnue", func(t *testing.T) {
-		wantCode(t, uploadPhoto(t, router, "inconnue-x", devA, validForm(room)), 404)
+		wantCode(t, uploadPhoto(t, router, unknownID, devA, validForm(room)), 404)
 	})
 	t.Run("id invalide", func(t *testing.T) {
 		f := validForm(room)
 		f.id = "pas-un-uuid"
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 400)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 400)
 	})
 	t.Run("taken_at invalide", func(t *testing.T) {
 		f := validForm(room)
 		f.takenAt = "hier"
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 400)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 400)
 	})
 	t.Run("fichier absent", func(t *testing.T) {
 		f := validForm(room)
 		f.file = nil
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 400)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 400)
 	})
 	t.Run("non JPEG", func(t *testing.T) {
 		f := validForm(room)
 		f.file = []byte("GIF89a....")
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 415)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 415)
 	})
 	t.Run("trop gros", func(t *testing.T) {
 		f := validForm(room)
 		f.file = jpegBytes(10<<20 + 1)
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 413)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 413)
 	})
 	t.Run("10 Mo exactement", func(t *testing.T) {
 		f := validForm(room)
 		f.id = "11111111-1234-4abc-8def-0123456789ab"
 		f.file = jpegBytes(10 << 20)
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 201)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 201)
 	})
 	t.Run("pièce inconnue", func(t *testing.T) {
 		f := validForm("00000000-0000-4000-8000-00000000dead")
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 404)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 404)
 	})
 	t.Run("pièce d'une autre visite", func(t *testing.T) {
-		wantCode(t, uploadPhoto(t, router, "maison-b", devB, validForm(room)), 404)
+		wantCode(t, uploadPhoto(t, router, b, devB, validForm(room)), 404)
 	})
 	t.Run("id déjà utilisé par une autre visite", func(t *testing.T) {
 		f := validForm("")
 		f.id = "22222222-1234-4abc-8def-0123456789ab"
-		wantCode(t, uploadPhoto(t, router, "maison-a", devA, f), 201)
-		wantCode(t, uploadPhoto(t, router, "maison-b", devB, f), 409)
-	})
-	t.Run("visite clôturée", func(t *testing.T) {
-		createVisit(t, router, "maison-c", devA)
-		body := `{"ops":[{"op_id":"c1","type":"close_visit","client_ts":1,"payload":{}}]}`
-		wantCode(t, do(t, router, "POST", "/api/visits/maison-c/ops", devA, body), 200)
-		f := validForm("")
-		f.id = "33333333-1234-4abc-8def-0123456789ab"
-		wantCode(t, uploadPhoto(t, router, "maison-c", devA, f), 409)
+		wantCode(t, uploadPhoto(t, router, a, devA, f), 201)
+		wantCode(t, uploadPhoto(t, router, b, devB, f), 409)
 	})
 }
 
 func TestPhotoDownloadErrors(t *testing.T) {
 	router, root := newTestRouterWithPhotos(t)
-	createVisit(t, router, "maison-a", devA)
-	createVisit(t, router, "maison-b", devB)
-	wantCode(t, uploadPhoto(t, router, "maison-a", devA, validForm("")), 201)
-	url := "/api/visits/maison-a/photos/" + testPhotoID
+	a := createVisit(t, router, "a", devA)
+	b := createVisit(t, router, "b", devB)
+	wantCode(t, uploadPhoto(t, router, a, devA, validForm("")), 201)
+	url := "/api/listings/" + a + "/visit/photos/" + testPhotoID
 
 	wantCode(t, do(t, router, "GET", url, "", ""), 400)
 	wantCode(t, do(t, router, "GET", url, devC, ""), 403)
-	wantCode(t, do(t, router, "GET", "/api/visits/maison-a/photos/inconnu", devA, ""), 404)
+	wantCode(t, do(t, router, "GET", "/api/listings/"+a+"/visit/photos/inconnu", devA, ""), 404)
 	// Photo d'une autre visite.
-	wantCode(t, do(t, router, "GET", "/api/visits/maison-b/photos/"+testPhotoID, devB, ""), 404)
+	wantCode(t, do(t, router, "GET", "/api/listings/"+b+"/visit/photos/"+testPhotoID, devB, ""), 404)
 
 	// Fichier disparu du disque.
-	if err := os.RemoveAll(filepath.Join(root, "maison-a")); err != nil {
+	if err := os.RemoveAll(filepath.Join(root, a)); err != nil {
 		t.Fatal(err)
 	}
 	wantCode(t, do(t, router, "GET", url, devA, ""), 404)
@@ -223,29 +215,20 @@ func countFiles(t *testing.T, dir string) int {
 
 func TestRefusedPhotoUploadLeavesNoFile(t *testing.T) {
 	router, root := newTestRouterWithPhotos(t)
-	createVisit(t, router, "maison-a", devA)
-	createVisit(t, router, "maison-b", devB)
-	createVisit(t, router, "maison-c", devA)
-	body := `{"ops":[{"op_id":"c1","type":"close_visit","client_ts":1,"payload":{}}]}`
-	wantCode(t, do(t, router, "POST", "/api/visits/maison-c/ops", devA, body), 200)
-
-	wantCode(t, uploadPhoto(t, router, "maison-c", devA, validForm("")), 409)
-	if n := countFiles(t, filepath.Join(root, "maison-c")); n != 0 {
-		t.Errorf("visite clôturée : %d fichier(s) écrit(s)", n)
-	}
-
-	wantCode(t, uploadPhoto(t, router, "maison-a", devA, validForm("")), 201)
-	wantCode(t, uploadPhoto(t, router, "maison-b", devB, validForm("")), 409)
-	if n := countFiles(t, filepath.Join(root, "maison-b")); n != 0 {
+	a := createVisit(t, router, "a", devA)
+	b := createVisit(t, router, "b", devB)
+	wantCode(t, uploadPhoto(t, router, a, devA, validForm("")), 201)
+	wantCode(t, uploadPhoto(t, router, b, devB, validForm("")), 409)
+	if n := countFiles(t, filepath.Join(root, b)); n != 0 {
 		t.Errorf("id déjà pris : %d fichier(s) écrit(s)", n)
 	}
 }
 
 func TestPhotoDownloadHeaders(t *testing.T) {
 	router := newTestRouter(t)
-	createVisit(t, router, "maison-a", devA)
-	wantCode(t, uploadPhoto(t, router, "maison-a", devA, validForm("")), 201)
-	get := do(t, router, "GET", "/api/visits/maison-a/photos/"+testPhotoID, devA, "")
+	a := createVisit(t, router, "a", devA)
+	wantCode(t, uploadPhoto(t, router, a, devA, validForm("")), 201)
+	get := do(t, router, "GET", "/api/listings/"+a+"/visit/photos/"+testPhotoID, devA, "")
 	wantCode(t, get, http.StatusOK)
 	for name, want := range map[string]string{
 		"Content-Type":           "image/jpeg",

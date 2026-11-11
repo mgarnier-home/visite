@@ -18,7 +18,7 @@ import (
 // Year est l'année courante (pour l'âge du bâtiment) ; 0 : âge laissé vide.
 type Data struct {
 	Code         string
-	Fiche        model.Fiche
+	Listing      model.Listing
 	Participants int
 	Rooms        []model.Room
 	Points       []model.Point
@@ -131,14 +131,14 @@ func (b *builder) summaryRows(room model.Room, points []model.Point, total float
 	}
 	b.row(room.Name, "", "total travaux", formatNumber(total))
 	price := ""
-	if d.Fiche.PriceEUR != nil {
-		price = formatNumber(*d.Fiche.PriceEUR + model.NotaryFees(*d.Fiche.PriceEUR) + total)
+	if d.Listing.PriceEUR != nil {
+		price = formatNumber(*d.Listing.PriceEUR + model.NotaryFees(*d.Listing.PriceEUR) + total)
 	}
 	b.row(room.Name, "", "prix réel", price)
 }
 
 func (b *builder) ficheRows() {
-	f := b.d.Fiche
+	l := b.d.Listing
 	add := func(name, value string) { b.row("Fiche", name, "fiche", value) }
 	num := func(v *float64) string {
 		if v == nil {
@@ -158,32 +158,31 @@ func (b *builder) ficheRows() {
 		}
 		return strconv.Itoa(*v)
 	}
-	add("address", text(f.Address))
-	add("price_eur", num(f.PriceEUR))
-	add("living_area_m2", num(f.LivingAreaM2))
-	add("floor_area_m2", num(f.FloorAreaM2))
-	add("land_area_m2", num(f.LandAreaM2))
-	add("visit_at", str(f.VisitAt))
-	add("agent_name", str(f.AgentName))
-	add("agent_phone", str(f.AgentPhone))
-	add("agent_email", str(f.AgentEmail))
-	add("construction_year", integer(f.ConstructionYear))
-	add("dpe_energy", str(f.DPEEnergy))
-	add("dpe_ges", str(f.DPEGES))
-	add("rooms_count", integer(f.RoomsCount))
-	add("bedrooms_count", integer(f.BedroomsCount))
-	add("listing_url", str(f.ListingURL))
-	add("heating_type", str(f.HeatingType))
-	add("notes", b.d.sharedValue(b.d.Code, "notes"))
-	add("prix_m2", num(model.PricePerM2(f)))
+	add("address", text(l.Address))
+	add("price_eur", num(l.PriceEUR))
+	add("living_area_m2", num(l.LivingAreaM2))
+	add("land_area_m2", num(l.LandAreaM2))
+	add("visit_at", str(l.VisitAt))
+	add("agency", text(l.Agency))
+	add("agent_phone", text(l.AgentPhone))
+	add("agent_email", text(l.AgentEmail))
+	add("construction_year", integer(l.ConstructionYear))
+	add("dpe", text(l.DPE))
+	add("ges", text(l.GES))
+	add("rooms", integer(l.Rooms))
+	add("bedrooms", integer(l.Bedrooms))
+	add("url", text(l.URL))
+	add("heating", text(l.Heating))
+	add("notes", text(l.Notes))
+	add("prix_m2", num(model.PricePerM2(l.PriceEUR, l.LivingAreaM2)))
 	fees := ""
-	if f.PriceEUR != nil {
-		fees = formatNumber(model.NotaryFees(*f.PriceEUR))
+	if l.PriceEUR != nil {
+		fees = formatNumber(model.NotaryFees(*l.PriceEUR))
 	}
 	add("frais_notaire", fees)
 	age := ""
-	if f.ConstructionYear != nil && b.d.Year != 0 {
-		age = strconv.Itoa(b.d.Year - *f.ConstructionYear)
+	if l.ConstructionYear != nil && b.d.Year != 0 {
+		age = strconv.Itoa(b.d.Year - *l.ConstructionYear)
 	}
 	add("age_batiment", age)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 
@@ -121,7 +120,6 @@ type applier struct {
 	device string
 	op     Op
 	now    time.Time
-	visit  store.VisitRow
 }
 
 var handlers = map[string]func(*applier) error{
@@ -133,8 +131,6 @@ var handlers = map[string]func(*applier) error{
 	TypeSetRating:   (*applier).setRating,
 	TypeSetComment:  (*applier).setComment,
 	TypeSetShared:   (*applier).setShared,
-	TypeSetFiche:    (*applier).setFiche,
-	TypeCloseVisit:  (*applier).closeVisit,
 }
 
 func (a *applier) apply() error {
@@ -142,17 +138,8 @@ func (a *applier) apply() error {
 	if !ok {
 		return reject(ReasonInvalid)
 	}
-	v, err := a.tx.Visit(a.code)
-	if err != nil {
+	if _, err := a.tx.Visit(a.code); err != nil {
 		return err
-	}
-	a.visit = v
-	// Les droits d'abord : un participant reste « forbidden » même sur une visite clôturée.
-	if (a.op.Type == TypeSetFiche || a.op.Type == TypeCloseVisit) && a.device != v.CreatorDevice {
-		return reject(ReasonForbidden)
-	}
-	if v.Closed {
-		return reject(ReasonClosed)
 	}
 	return handler(a)
 }
@@ -198,10 +185,9 @@ func (a *applier) idTaken(id string) (bool, error) {
 	return false, nil
 }
 
-// newID vérifie l'identifiant d'un élément ajouté : non vide, encore libre, et distinct du
-// code de la visite (cible des notes de la visite).
+// newID vérifie l'identifiant d'un élément ajouté : non vide et encore libre.
 func (a *applier) newID(id string) error {
-	if id == "" || id == a.code {
+	if id == "" {
 		return reject(ReasonInvalid)
 	}
 	taken, err := a.idTaken(id)
@@ -436,12 +422,9 @@ func (a *applier) setShared() error {
 	return a.writeLWW(store.KindShared, store.LWWKey{ID: p.TargetID, Sub: p.Field}, p.Value)
 }
 
-// sharedTarget résout la cible d'une valeur partagée : la visite (par son code), puis
-// point, question et pièce. Le point n'est renvoyé que pour TargetPoint.
+// sharedTarget résout la cible d'une valeur partagée : point, question puis pièce.
+// Le point n'est renvoyé que pour TargetPoint.
 func (a *applier) sharedTarget(id string) (model.TargetKind, *model.Point, error) {
-	if id == a.code {
-		return model.TargetVisit, nil, nil
-	}
 	pt, code, err := a.tx.Point(id)
 	if err == nil {
 		if code != a.code {
@@ -461,103 +444,4 @@ func (a *applier) sharedTarget(id string) (model.TargetKind, *model.Point, error
 	}
 	_, err = a.room(id)
 	return model.TargetRoom, nil, err
-}
-
-// setFiche applique chaque champ présent selon sa propre « dernière écriture gagnante ».
-// Changer bedrooms_count ne crée ni ne retire aucune pièce.
-func (a *applier) setFiche() error {
-	var p struct {
-		Fields map[string]json.RawMessage `json:"fields"`
-	}
-	if err := a.decode(&p); err != nil {
-		return err
-	}
-	if p.Fields == nil {
-		return reject(ReasonInvalid)
-	}
-	merged, err := mergeFiche(a.visit.Fiche, p.Fields)
-	if err != nil {
-		return err
-	}
-
-	names := make([]string, 0, len(p.Fields))
-	for name := range p.Fields {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	winners := []string{}
-	for _, name := range names {
-		ts, dev, ok, err := a.tx.GetLWW(store.KindFiche, store.LWWKey{ID: a.code, Sub: name})
-		if err != nil {
-			return err
-		}
-		if !ok || Wins(ts, dev, a.op.ClientTS, a.device) {
-			winners = append(winners, name)
-		}
-	}
-	seq, err := a.tx.NextSeq(a.code)
-	if err != nil {
-		return err
-	}
-	if len(winners) == 0 {
-		// Aucun champ ne gagne : la fiche est renvoyée telle quelle (voir writeLWW).
-		return a.tx.TouchLWW(store.KindFiche, store.LWWKey{ID: a.code}, seq)
-	}
-	for _, name := range winners {
-		if err := a.tx.PutLWW(store.KindFiche, store.LWWKey{ID: a.code, Sub: name}, merged[name], a.op.ClientTS, a.device, seq); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// mergeFiche applique tous les champs reçus à la fiche courante et vérifie le résultat ;
-// champ inconnu, valeur mal typée ou fiche invalide ⇒ invalid. Chaque champ étant validé
-// indépendamment, la fiche obtenue avec les seuls champs gagnants est elle aussi valide.
-// Renvoie les valeurs normalisées, champ par champ.
-func mergeFiche(cur model.Fiche, fields map[string]json.RawMessage) (map[string]json.RawMessage, error) {
-	merged, err := ficheFields(cur)
-	if err != nil {
-		return nil, err
-	}
-	for name, raw := range fields {
-		if _, ok := merged[name]; !ok {
-			return nil, reject(ReasonInvalid)
-		}
-		merged[name] = raw
-	}
-	b, err := json.Marshal(merged)
-	if err != nil {
-		return nil, reject(ReasonInvalid)
-	}
-	var f model.Fiche
-	if err := json.Unmarshal(b, &f); err != nil || f.Validate() != nil {
-		return nil, reject(ReasonInvalid)
-	}
-	return ficheFields(f)
-}
-
-// ficheFields renvoie la fiche sous la forme {champ JSON: valeur}.
-func ficheFields(f model.Fiche) (map[string]json.RawMessage, error) {
-	b, err := json.Marshal(f)
-	if err != nil {
-		return nil, err
-	}
-	m := map[string]json.RawMessage{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (a *applier) closeVisit() error {
-	var p struct{}
-	if err := a.decode(&p); err != nil {
-		return err
-	}
-	seq, err := a.tx.NextSeq(a.code)
-	if err != nil {
-		return err
-	}
-	return a.tx.CloseVisit(a.code, a.now, seq)
 }

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Accueil — colonnes par statut</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 1280px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 24px 32px; background: #faf9fd; color: #1a1b1f; font-family: Roboto, system-ui, sans-serif">
+  <header style="display: flex; align-items: center; gap: 16px">
+    <div style="display: flex; flex-direction: column; flex-grow: 1">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 500">Visite</h1>
+      <span style="font-size: 14px; color: #44474e">6 annonces suivies</span>
+    </div>
+    <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 20px; background: transparent; color: #44474e; font: inherit; font-size: 14px; font-weight: 500">Écartées (3)</button>
+    <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 20px; background: transparent; color: #44474e; font: inherit; font-size: 14px; font-weight: 500">Modèle de visite</button>
+    <a href="Ajout.dc.html" style="height: 44px; padding: 0 20px 0 16px; display: flex; align-items: center; gap: 8px; border-radius: 22px; background: #005cbb; color: #ffffff; font-size: 14px; font-weight: 500">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      Ajouter une annonce
+    </a>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; flex-grow: 1; min-height: 0">
+    <sc-for list="{{cols}}" as="col" hint-placeholder-count="4">
+      <section style="display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 16px; background: #eeedf1">
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #44474e">
+          <span style="{{col.chip}}">{{col.label}}</span>
+          <span>{{col.count}}</span>
+        </h2>
+        <sc-for list="{{col.items}}" as="it" hint-placeholder-count="2">
+          <a href="Annonce.dc.html" style="display: flex; flex-direction: column; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e3e2e6">
+            <div style="{{it.photo}}">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>
+              <span style="position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: rgba(26,27,31,0.78); color: #ffffff; font-size: 11px; font-weight: 500">{{it.source}}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px">
+              <span style="font-size: 18px; font-weight: 700">{{it.price}}</span>
+              <span style="font-size: 13px">{{it.specs}}</span>
+              <span style="font-size: 13px; color: #44474e">{{it.city}}</span>
+              <span style="{{it.nextStyle}}">{{it.next}}</span>
+            </div>
+          </a>
+        </sc-for>
+      </section>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const chips = {
+      contact: 'padding: 4px 10px; border-radius: 8px; background: #e3e2e6; color: #44474e',
+      mail: 'padding: 4px 10px; border-radius: 8px; background: #d7e3ff; color: #00458f',
+      planned: 'padding: 4px 10px; border-radius: 8px; background: #ffdcc2; color: #6e3900',
+      done: 'padding: 4px 10px; border-radius: 8px; background: #eaddff; color: #4f378a'
+    };
+    const photo = (bg) => 'position: relative; height: 150px; display: flex; align-items: center; justify-content: center; background: ' + bg;
+    const next = (strong) => 'font-size: 13px; margin-top: 4px; ' + (strong ? 'font-weight: 500; color: #00458f' : 'color: #44474e');
+    const col = (key, label, items) => ({ chip: chips[key], label, count: String(items.length), items });
+    return {
+      cols: [
+        col('contact', 'À contacter', [
+          { photo: photo('#a7a2c4'), source: "Bien'ici", price: '315 000 €', specs: 'Maison · 5 p · 3 ch · 110 m²', city: 'Bouguenais · terrain 600 m²', next: 'Ajoutée le 9 nov', nextStyle: next(false) },
+          { photo: photo('#c49a8f'), source: 'Leboncoin', price: '268 000 €', specs: 'Maison · 4 p · 2 ch · 88 m²', city: 'Saint-Sébastien · terrain 300 m²', next: 'Ajoutée hier', nextStyle: next(false) }
+        ]),
+        col('mail', 'Mail envoyé', [
+          { photo: photo('#b8a58c'), source: 'Leboncoin', price: '289 000 €', specs: 'Maison · 4 p · 3 ch · 96 m²', city: 'Rezé · terrain 450 m²', next: 'Envoyé le 8 nov', nextStyle: next(false) },
+          { photo: photo('#8fae9b'), source: 'Jinka', price: '412 000 €', specs: 'Maison · 6 p · 4 ch · 142 m²', city: 'Basse-Goulaine · terrain 1 200 m²', next: 'Envoyé le 10 nov', nextStyle: next(false) }
+        ]),
+        col('planned', 'Visite planifiée', [
+          { photo: photo('#9fb3c8'), source: "Bien'ici", price: '345 000 €', specs: 'Maison · 5 p · 3 ch · 118 m²', city: 'Vertou · terrain 820 m²', next: 'Jeu. 14 nov · 10:30', nextStyle: next(true) }
+        ]),
+        col('done', 'Visite effectuée', [
+          { photo: photo('#9cb8b5'), source: "Bien'ici", price: '359 000 €', specs: 'Maison · 5 p · 4 ch · 125 m²', city: 'Les Sorinières · terrain 700 m²', next: 'Note 3,8 / 5 · voir le récap', nextStyle: next(true) }
+        ])
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

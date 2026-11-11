@@ -83,3 +83,22 @@ func TestCheckJPEG(t *testing.T) {
 		t.Errorf("flux trop court : %v", err)
 	}
 }
+
+func TestRemoveAll(t *testing.T) {
+	fs := photos.FS{Root: t.TempDir()}
+	if err := fs.Put("annonce/piece/a.jpg", bytes.NewReader([]byte("x"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.RemoveAll("annonce"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Open("annonce/piece/a.jpg"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("fichier encore présent : %v", err)
+	}
+	if err := fs.RemoveAll("annonce"); err != nil {
+		t.Errorf("dossier absent : %v", err)
+	}
+	if err := fs.RemoveAll("../dehors"); !errors.Is(err, photos.ErrBadPath) {
+		t.Errorf("chemin hors racine : %v", err)
+	}
+}

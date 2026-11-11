@@ -51,33 +51,12 @@ type TemplateQuestion struct {
 	Important bool   `json:"important"`
 }
 
-type Fiche struct {
-	Address          string   `json:"address"`
-	PriceEUR         *float64 `json:"price_eur"`
-	LivingAreaM2     *float64 `json:"living_area_m2"`
-	FloorAreaM2      *float64 `json:"floor_area_m2"`
-	LandAreaM2       *float64 `json:"land_area_m2"`
-	VisitAt          *string  `json:"visit_at"`
-	AgentName        *string  `json:"agent_name"`
-	AgentPhone       *string  `json:"agent_phone"`
-	AgentEmail       *string  `json:"agent_email"`
-	ConstructionYear *int     `json:"construction_year"`
-	DPEEnergy        *string  `json:"dpe_energy"`
-	DPEGES           *string  `json:"dpe_ges"`
-	RoomsCount       *int     `json:"rooms_count"`
-	BedroomsCount    *int     `json:"bedrooms_count"`
-	ListingURL       *string  `json:"listing_url"`
-	HeatingType      *string  `json:"heating_type"`
-}
-
+// VisitInfo : Code est l'id de l'annonce.
 type VisitInfo struct {
-	Code         string  `json:"code"`
-	IsCreator    bool    `json:"is_creator"`
-	CreatedAt    string  `json:"created_at"`
-	ClosedAt     *string `json:"closed_at"`
-	Fiche        Fiche   `json:"fiche"`
-	PackingList  string  `json:"packing_list"`
-	Participants int     `json:"participants"`
+	Code         string `json:"code"`
+	CreatedAt    string `json:"created_at"`
+	PackingList  string `json:"packing_list"`
+	Participants int    `json:"participants"`
 }
 
 type Room struct {

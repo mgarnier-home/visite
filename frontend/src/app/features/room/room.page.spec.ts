@@ -7,8 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api.client';
 import { Point, VisitState } from '../../core/api.types';
 import { getDeviceId } from '../../core/device-id';
-import { LocalStore } from '../../core/local-store';
-import { SyncService, SyncStatus } from '../../core/sync.service';
+import { SyncService } from '../../core/sync.service';
 import { provideAppIcons } from '../../shared/icons';
 import { By } from '@angular/platform-browser';
 import { PointCardComponent } from './point-card.component';
@@ -17,11 +16,11 @@ import { RoomPage } from './room.page';
 const point = (id: string, room_id: string, over: Partial<Point> = {}): Point =>
   ({ id, room_id, label: `Point ${id}`, type: 'note', options: [], weight: 1, position: 0, important: true, ...over }) as Point;
 
-function makeState(closed = false): VisitState {
+function makeState(): VisitState {
   return {
     seq: 1,
     me: { number: 1 },
-    visit: { code: 'maison-x', closed_at: closed ? '2026-10-25T10:00:00Z' : null, fiche: { address: 'x' } },
+    visit: { code: 'maison-x' },
     rooms: [
       { id: 'r2', name: 'Cuisine', dir_name: 'cuisine', kind: 'room', position: 2, hidden: false },
       { id: 'r1', name: 'Salon', dir_name: 'salon', kind: 'room', position: 1, hidden: false },
@@ -64,10 +63,8 @@ function makeState(closed = false): VisitState {
 
 describe('RoomPage', () => {
   const state = signal<VisitState | null>(null);
-  const status = signal<SyncStatus>({ online: true, pendingOps: 0, pendingPhotos: 0, error: null });
-  const sync = { state, status, dispatch: vi.fn(), addPhoto: vi.fn() };
+  const sync = { state, dispatch: vi.fn(), addPhoto: vi.fn() };
   const api = { photoUrl: vi.fn() };
-  const store = { pendingPhotos: vi.fn() };
   const snack = { open: vi.fn() };
   let params: BehaviorSubject<ParamMap>;
 
@@ -77,20 +74,16 @@ describe('RoomPage', () => {
     params = new BehaviorSubject(convertToParamMap({ roomId: 'r1' }));
     sync.dispatch.mockResolvedValue(undefined);
     api.photoUrl.mockImplementation((c: string, id: string, d: string) => `/api/${c}/${id}?d=${d}`);
-    store.pendingPhotos.mockResolvedValue([{ id: 'ph-local', code: 'maison-x', room_id: 'r1', taken_at: 'x', blob: new Blob(['x']) }]);
-    URL.createObjectURL = vi.fn(() => 'blob:local');
-    URL.revokeObjectURL = vi.fn();
     state.set(makeState());
     TestBed.configureTestingModule({
       imports: [RoomPage],
       providers: [
         { provide: SyncService, useValue: sync },
         { provide: ApiClient, useValue: api },
-        { provide: LocalStore, useValue: store },
         { provide: MatSnackBar, useValue: snack },
         {
           provide: ActivatedRoute,
-          useValue: { paramMap: params, parent: { paramMap: new BehaviorSubject(convertToParamMap({ code: 'maison-x' })) } },
+          useValue: { paramMap: params, parent: { paramMap: new BehaviorSubject(convertToParamMap({ id: 'maison-x' })) } },
         },
         provideAppIcons(),
       ],
@@ -98,7 +91,6 @@ describe('RoomPage', () => {
   });
 
   async function setup() {
-    await getDeviceId(); // chauffe le cache : la page le lit au premier tick
     const fixture = TestBed.createComponent(RoomPage);
     fixture.detectChanges();
     await settle(fixture);
@@ -278,7 +270,7 @@ describe('RoomPage', () => {
     const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     expect(q<HTMLButtonElement>(el, '[data-test=prev]').disabled).toBe(true);
     q<HTMLButtonElement>(el, '[data-test=next]').click();
-    expect(nav).toHaveBeenCalledWith(['/v', 'maison-x', 'room', 'r2']);
+    expect(nav).toHaveBeenCalledWith(['/annonces', 'maison-x', 'piece', 'r2']);
   });
 
   it('un changement de paramètre vers la pièce suivante réaffiche la nouvelle pièce', async () => {
@@ -290,7 +282,7 @@ describe('RoomPage', () => {
     // r3 est cachée : la suivante de r2 est r4
     const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     q<HTMLButtonElement>(el, '[data-test=next]').click();
-    expect(nav).toHaveBeenCalledWith(['/v', 'maison-x', 'room', 'r4']);
+    expect(nav).toHaveBeenCalledWith(['/annonces', 'maison-x', 'piece', 'r4']);
   });
 
   it('renommer : valeur nettoyée, vide refusée', async () => {
@@ -308,29 +300,13 @@ describe('RoomPage', () => {
     expect(sync.dispatch).toHaveBeenCalledWith('rename_room', { room_id: 'r1', name: 'Séjour' });
   });
 
-  it('photos : blob local si encore en file, sinon photoUrl', async () => {
+  it('photos : une miniature par photo de la pièce, servie par photoUrl', async () => {
     const { el } = await setup();
     const srcs = Array.from(el.querySelectorAll<HTMLImageElement>('[data-test=thumb]')).map((i) => i.getAttribute('src'));
-    expect(srcs).toEqual(['blob:local', `/api/maison-x/ph-remote?d=${await getDeviceId()}`]);
-  });
-
-  it('révoque l\'URL locale à la destruction', async () => {
-    const { fixture } = await setup();
-    fixture.destroy();
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local');
-  });
-
-  it('visite clôturée : tout est désactivé', async () => {
-    state.set(makeState(true));
-    showingSecondary();
-    const { el } = await setup();
-    const controls = Array.from(el.querySelectorAll<HTMLButtonElement>('[data-test=choice], [data-test=add-point], [data-test=add-question], [data-test=hide], [data-test=photo-btn], [data-test=rename]'));
-    expect(controls.length).toBeGreaterThan(5);
-    expect(controls.every((b) => b.disabled)).toBe(true);
-    expect(q<HTMLTextAreaElement>(el, '[data-test=answer]').disabled).toBe(true);
-    expect(q<HTMLTextAreaElement>(el, '[data-test=comment]').disabled).toBe(true);
-    expect(q<HTMLTextAreaElement>(el, '[data-test=room-notes]').disabled).toBe(true);
-    expect(q<HTMLInputElement>(el, '[data-test=area]').disabled).toBe(true);
+    expect(srcs).toEqual([
+      `/api/maison-x/ph-local?d=${getDeviceId()}`,
+      `/api/maison-x/ph-remote?d=${getDeviceId()}`,
+    ]);
   });
 
   it('une erreur de photo est signalée dans un snackbar', async () => {
@@ -374,7 +350,7 @@ describe('RoomPage', () => {
     expect(sync.dispatch).not.toHaveBeenCalled();
     q<HTMLButtonElement>(document.body, '[data-test=confirm]').click();
     await vi.waitFor(() => expect(sync.dispatch).toHaveBeenCalledWith('hide_room', { room_id: 'r1' }));
-    await vi.waitFor(() => expect(nav).toHaveBeenCalledWith(['/v', 'maison-x', 'rooms']));
+    await vi.waitFor(() => expect(nav).toHaveBeenCalledWith(['/annonces', 'maison-x', 'pieces']));
   });
 
   it('navigation sans perte de focus : la réponse saisie est enregistrée pour l\'ancienne question', async () => {

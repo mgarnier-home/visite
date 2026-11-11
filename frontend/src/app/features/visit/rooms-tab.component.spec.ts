@@ -12,16 +12,14 @@ import { RoomsTabComponent } from './rooms-tab.component';
 const point = (id: string, room_id: string): Point =>
   ({ id, room_id, label: id, type: 'note', options: [], weight: 1, position: 0, important: true });
 
-function makeState(over: { closed?: boolean; packing?: string } = {}): VisitState {
+function makeState(over: { packing?: string } = {}): VisitState {
   const points = Array.from({ length: 9 }, (_, i) => point(`p${i}`, 'r1'));
   return {
     seq: 1,
     me: { number: 1 },
     visit: {
       code: 'maison-x',
-      closed_at: over.closed ? '2026-10-25T10:00:00Z' : null,
       packing_list: over.packing ?? '',
-      fiche: { address: '12 rue des Lilas' },
     },
     rooms: [
       { id: 'r2', name: 'Cuisine', dir_name: 'cuisine', kind: 'room', position: 2, hidden: false },
@@ -96,7 +94,7 @@ describe('RoomsTabComponent', () => {
     expect(rooms.map((r) => r.querySelector('.name')?.textContent)).toEqual(['Salon', 'Cuisine']);
     expect(rooms[0].querySelector('[data-test=progress]')?.textContent?.trim()).toBe('3 / 9');
     expect(rooms[1].querySelector('[data-test=progress]')?.textContent?.trim()).toBe('0 / 1');
-    expect(rooms[0].getAttribute('href')).toBe('/v/maison-x/room/r1');
+    expect(rooms[0].getAttribute('href')).toBe('/annonces/maison-x/piece/r1');
   });
 
   it('affiche 2 / 9 pour une pièce avec deux points remplis', () => {
@@ -168,12 +166,6 @@ describe('RoomsTabComponent', () => {
     (document.body.querySelector('[data-test=confirm]') as HTMLButtonElement).click();
     await vi.waitFor(() => expect(sync.dispatch).toHaveBeenCalled());
     expect(sync.dispatch).toHaveBeenCalledWith('add_room', { id: expect.any(String), name: 'Garage', from_section_id: null });
-  });
-
-  it('visite clôturée : ajout et photo désactivés', () => {
-    const { el } = setup(makeState({ closed: true }));
-    expect((el.querySelector('[data-test=add-room]') as HTMLButtonElement).disabled).toBe(true);
-    expect((el.querySelector('[data-test=photo-btn]') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('signale un stockage plein à l\'enregistrement d\'une photo globale', async () => {

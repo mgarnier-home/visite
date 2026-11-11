@@ -24,8 +24,8 @@ const (
 
 // registerPhotoRoutes ajoute les routes des photos au sous-routeur /api.
 func (h *handlers) registerPhotoRoutes(api *mux.Router) {
-	api.HandleFunc("/visits/{code}/photos", h.uploadPhoto).Methods(http.MethodPost)
-	api.HandleFunc("/visits/{code}/photos/{id}", h.getPhoto).Methods(http.MethodGet)
+	api.HandleFunc("/listings/{id}/visit/photos", h.uploadPhoto).Methods(http.MethodPost)
+	api.HandleFunc("/listings/{id}/visit/photos/{photoId}", h.getPhoto).Methods(http.MethodGet)
 }
 
 func (h *handlers) uploadPhoto(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +91,7 @@ func (h *handlers) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Visite clôturée ou id déjà pris : refusé avant d'écrire quoi que ce soit sur le disque.
+	// Id déjà pris par une autre visite : refusé avant d'écrire quoi que ce soit sur le disque.
 	exists, err := h.store.CheckPhotoUpload(r.Context(), code, id)
 	if h.photoRefused(w, err) {
 		return
@@ -130,8 +130,6 @@ func (h *handlers) photoRefused(w http.ResponseWriter, err error) bool {
 	switch {
 	case err == nil:
 		return false
-	case errors.Is(err, store.ErrClosed):
-		writeError(w, http.StatusConflict, "la visite est clôturée")
 	case errors.Is(err, store.ErrConflict):
 		writeError(w, http.StatusConflict, "cet id de photo est déjà utilisé")
 	case errors.Is(err, store.ErrNotFound):
@@ -147,7 +145,7 @@ func (h *handlers) getPhoto(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rel, err := h.store.PhotoPathByID(r.Context(), code, mux.Vars(r)["id"])
+	rel, err := h.store.PhotoPathByID(r.Context(), code, mux.Vars(r)["photoId"])
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "photo introuvable")
 		return
