@@ -103,12 +103,17 @@ Fichiers sous `VISITE_PHOTOS_DIR/listings/<listing_id>/`, supprimés avec l'anno
 
 Les tables de la v1 sont conservées, avec ces changements :
 
-- `visits` : la clé `code` devient `listing_id` (référence `listings(id)`, cascade) ; les colonnes
-  de la fiche (`address` … `heating_type`, `fiche_ts`), `creator_device_id` et `closed_at`
-  disparaissent.
-- Les tables qui référencent `visits(code)` (`participants`, `visit_rooms`, `photos`) suivent
-  le renommage.
-- Opérations supprimées : `set_fiche`, `close_visit`, et les refus `closed` / `forbidden`.
+- `visits` : la clé `code` garde son nom (et `visit_code` dans les autres tables) mais contient
+  l'id de l'annonce, avec une référence `listings(id)` en cascade ; les colonnes de la fiche
+  (`address` … `heating_type`, `fiche_ts`), `creator_device_id` et `closed_at` disparaissent.
+- Supprimer une annonce supprime aussi les lignes de sa visite sans clé étrangère
+  (`shared_values`).
+- Opérations supprimées : `set_fiche`, `close_visit`, et les refus `closed` / `forbidden`. Les
+  notes libres de la visite (`set_shared` sur la visite elle-même) disparaissent : ce sont les
+  notes de l'annonce. Les notes libres par pièce restent.
+- L'exclusion de pièces à la création disparaît (la visite est créée sans écran) : on masque les
+  pièces inutiles depuis l'onglet Pièces, comme en v1.
+- L'identifiant d'appareil passe d'IndexedDB à `localStorage`.
 
 ## 5. Récupération des annonces
 
