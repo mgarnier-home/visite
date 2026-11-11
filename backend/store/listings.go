@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -254,4 +256,99 @@ func (s *Store) ListingPhotoPath(ctx context.Context, listingID, photoID string)
 		return "", ErrNotFound
 	}
 	return path, err
+}
+
+// patchableFields : champs de suivi modifiables en plus de ceux de ListingData.
+var patchableFields = func() map[string]bool {
+	m := map[string]bool{"status": true, "mail_sent_at": true, "visit_at": true, "visited_at": true, "address": true, "notes": true}
+	t := reflect.TypeOf(model.ListingData{})
+	for i := 0; i < t.NumField(); i++ {
+		m[strings.Split(t.Field(i).Tag.Get("json"), ",")[0]] = true
+	}
+	return m
+}()
+
+// UpdateListing applique les champs envoyés (JSON, null vide un champ nullable) et renvoie
+// l'annonce. Tout autre champ, un statut inconnu, une date non RFC 3339 ou un passage à
+// « planned » sans date de visite → model.ErrInvalid, sans rien modifier. Passer à « mail » ou
+// « done » renseigne mail_sent_at / visited_at (now) s'ils sont nuls ; aucune date n'est vidée
+// par un changement de statut.
+func (s *Store) UpdateListing(ctx context.Context, id string, fields map[string]json.RawMessage, now time.Time) (model.Listing, error) {
+	for k := range fields {
+		if !patchableFields[k] {
+			return model.Listing{}, fmt.Errorf("%w: champ %q non modifiable", model.ErrInvalid, k)
+		}
+	}
+	var out model.Listing
+	err := s.InTx(ctx, func(t *Tx) error {
+		cur, err := getListing(ctx, t.tx, id)
+		if err != nil {
+			return err
+		}
+		// Superposition sur l'annonce courante : ce qui n'est pas envoyé reste tel quel.
+		base, err := json.Marshal(cur)
+		if err != nil {
+			return err
+		}
+		merged := map[string]json.RawMessage{}
+		if err := json.Unmarshal(base, &merged); err != nil {
+			return err
+		}
+		for k, v := range fields {
+			merged[k] = v
+		}
+		buf, err := json.Marshal(merged)
+		if err != nil {
+			return err
+		}
+		l := cur
+		l.Features = nil // un tableau absent du JSON ne doit pas se mêler à l'ancien
+		if err := json.Unmarshal(buf, &l); err != nil {
+			return fmt.Errorf("%w: %v", model.ErrInvalid, err)
+		}
+		for _, d := range []*string{l.MailSentAt, l.VisitAt, l.VisitedAt} {
+			if d != nil {
+				if _, err := time.Parse(time.RFC3339, *d); err != nil {
+					return fmt.Errorf("%w: date %q invalide (RFC 3339 attendu)", model.ErrInvalid, *d)
+				}
+			}
+		}
+		ts := now.UTC().Format(time.RFC3339)
+		switch l.Status {
+		case model.StatusContact, model.StatusDropped:
+		case model.StatusMail:
+			if l.MailSentAt == nil {
+				l.MailSentAt = &ts
+			}
+		case model.StatusPlanned:
+			if l.VisitAt == nil {
+				return fmt.Errorf("%w: visit_at requis pour planifier", model.ErrInvalid)
+			}
+		case model.StatusDone:
+			if l.VisitedAt == nil {
+				l.VisitedAt = &ts
+			}
+		default:
+			return fmt.Errorf("%w: statut %q inconnu", model.ErrInvalid, l.Status)
+		}
+		features, err := json.Marshal(append([]string{}, l.Features...))
+		if err != nil {
+			return err
+		}
+		if _, err := t.tx.ExecContext(ctx, `UPDATE listings SET status=?, mail_sent_at=?, visit_at=?,
+			visited_at=?, address=?, notes=?, title=?, property_type=?, price_eur=?, living_area_m2=?,
+			land_area_m2=?, rooms=?, bedrooms=?, bathrooms=?, shower_rooms=?, toilets=?, parking=?,
+			floor=?, construction_year=?, dpe=?, ges=?, heating=?, city=?, postal_code=?,
+			description=?, agency=?, agent_phone=?, agent_email=?, features=? WHERE id=?`,
+			l.Status, l.MailSentAt, l.VisitAt, l.VisitedAt, l.Address, l.Notes, l.Title,
+			l.PropertyType, l.PriceEUR, l.LivingAreaM2, l.LandAreaM2, l.Rooms, l.Bedrooms,
+			l.Bathrooms, l.ShowerRooms, l.Toilets, l.Parking, l.Floor, l.ConstructionYear, l.DPE,
+			l.GES, l.Heating, l.City, l.PostalCode, l.Description, l.Agency, l.AgentPhone,
+			l.AgentEmail, string(features), id); err != nil {
+			return err
+		}
+		out, err = getListing(ctx, t.tx, id)
+		return err
+	})
+	return out, err
 }

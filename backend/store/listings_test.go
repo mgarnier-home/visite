@@ -230,3 +230,61 @@ func count(t *testing.T, db *sql.DB, table string) int {
 	}
 	return n
 }
+
+func TestUpdateListingStatus(t *testing.T) {
+	ctx := context.Background()
+	s := seededStore(t)
+	l, err := s.CreateListing(ctx, sampleListing("https://example.test/u", 1), nil, testNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.VisitAt = nil
+	patch := func(now time.Time, body string) (model.Listing, error) {
+		var f map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(body), &f); err != nil {
+			t.Fatal(err)
+		}
+		return s.UpdateListing(ctx, l.ID, f, now)
+	}
+	t1, t2 := testNow.Add(time.Hour), testNow.Add(2*time.Hour)
+
+	got, err := patch(t1, `{"status":"mail"}`)
+	if err != nil || got.MailSentAt == nil || *got.MailSentAt != t1.UTC().Format(time.RFC3339) {
+		t.Fatalf("mail : %+v, %v", got.MailSentAt, err)
+	}
+	if got, _ = patch(t2, `{"status":"mail"}`); *got.MailSentAt != t1.UTC().Format(time.RFC3339) {
+		t.Fatalf("mail_sent_at changé : %s", *got.MailSentAt)
+	}
+	// sampleListing a déjà un visit_at : on le vide, puis planned doit échouer sans rien modifier.
+	if _, err := patch(t2, `{"visit_at":null}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := patch(t2, `{"status":"planned","notes":"x"}`); !errors.Is(err, model.ErrInvalid) {
+		t.Fatalf("planned sans date : %v", err)
+	}
+	if got, _ = s.GetListing(ctx, l.ID); got.Status != model.StatusMail || got.Notes == "x" {
+		t.Fatalf("modifié malgré l'erreur : %+v", got)
+	}
+	if got, err = patch(t2, `{"status":"planned","visit_at":"2026-12-01T10:00:00Z"}`); err != nil || got.Status != model.StatusPlanned {
+		t.Fatalf("planned : %v", err)
+	}
+	if got, _ = patch(t2, `{"status":"done"}`); got.VisitedAt == nil || *got.VisitedAt != t2.UTC().Format(time.RFC3339) {
+		t.Fatalf("done : %v", got.VisitedAt)
+	}
+	got, _ = patch(t2, `{"status":"contact"}`)
+	if got.MailSentAt == nil || got.VisitAt == nil || got.VisitedAt == nil {
+		t.Fatalf("dates perdues : %+v", got)
+	}
+	for _, body := range []string{`{"status":"zzz"}`, `{"raw":"x"}`, `{"id":"x"}`, `{"rooms":"deux"}`, `{"visit_at":"hier"}`} {
+		if _, err := patch(t2, body); !errors.Is(err, model.ErrInvalid) {
+			t.Fatalf("%s : %v", body, err)
+		}
+	}
+	got, err = patch(t2, `{"price_eur":null,"city":"Rennes","features":["pool"]}`)
+	if err != nil || got.PriceEUR != nil || got.City != "Rennes" || !reflect.DeepEqual(got.Features, []string{"pool"}) || got.Title != "Maison 5 pièces" {
+		t.Fatalf("données : %+v, %v", got, err)
+	}
+	if _, err := s.UpdateListing(ctx, "inconnu", nil, t2); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("inconnu : %v", err)
+	}
+}
