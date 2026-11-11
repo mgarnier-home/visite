@@ -63,6 +63,8 @@ export class SyncService {
   /** Envois en cours, exécutés l'un après l'autre pour garder l'ordre des opérations. */
   private queue: Promise<unknown> = Promise.resolve();
   private inFlight = 0;
+  /** Le rechargement après un échec d'écriture a échoué : l'affichage peut montrer une valeur non enregistrée. */
+  private needsReload = false;
 
   private readonly onVisibility = () => {
     if (this.document.visibilityState === 'visible') void this.poll(this.generation, true);
@@ -91,6 +93,7 @@ export class SyncService {
     this.timer = null;
     this.document.removeEventListener('visibilitychange', this.onVisibility);
     this.inFlight = 0;
+    this.needsReload = false;
     this.stateSig.set(null);
     this.statusSig.set(IDLE_STATUS);
   }
@@ -154,13 +157,18 @@ export class SyncService {
     return job;
   }
 
-  /** État complet du serveur ; en cas d'échec on garde l'affichage, la récupération périodique reprendra. */
+  /** État complet du serveur ; en cas d'échec, le rechargement est repris par la récupération périodique. */
   private async reload(id: string, generation: number): Promise<void> {
     try {
       const full = await this.api.state(id);
-      if (generation === this.generation) this.stateSig.set(full);
+      if (generation !== this.generation) return;
+      this.stateSig.set(full);
+      this.needsReload = false;
+      this.patchStatus({ error: null });
     } catch {
-      // rien : le prochain cycle de récupération signalera le problème
+      if (generation !== this.generation) return;
+      this.needsReload = true;
+      this.patchStatus({ error: 'Modifications non enregistrées : rechargement de la visite en attente' });
     }
   }
 
@@ -181,8 +189,11 @@ export class SyncService {
     if (generation !== this.generation || !this.id) return;
     if (this.inFlight === 0 && this.document.visibilityState !== 'hidden') {
       try {
-        await this.pull(this.id, generation);
-        if (generation === this.generation) this.patchStatus({ error: null });
+        if (this.needsReload) await this.reload(this.id, generation);
+        else {
+          await this.pull(this.id, generation);
+          if (generation === this.generation) this.patchStatus({ error: null });
+        }
       } catch (e) {
         if (generation === this.generation) this.patchStatus({ error: `Mise à jour impossible : ${messageOf(e)}` });
       }

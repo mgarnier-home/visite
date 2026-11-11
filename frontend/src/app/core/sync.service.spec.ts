@@ -120,6 +120,22 @@ describe('SyncService', () => {
     });
   }
 
+  it('sendOps et state() en échec : erreur persistante, le poll suivant recharge l\'état complet', async () => {
+    api.sendOps.mockRejectedValueOnce(new ApiError(0, 'Réseau indisponible'));
+    api.state.mockRejectedValueOnce(new ApiError(0, 'Réseau indisponible'));
+    await svc.dispatch('set_rating', { point_id: 'p1', value: 4 });
+    expect(svc.status().error).toContain('Modifications non enregistrées');
+    expect(svc.state()?.ratings).toHaveLength(1); // valeur optimiste encore affichée
+    api.state.mockClear();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(api.state).toHaveBeenCalledTimes(1);
+    expect(api.changes).not.toHaveBeenCalled();
+    expect(svc.state()?.ratings).toEqual([]);
+    expect(svc.status().error).toBeNull();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(api.changes).toHaveBeenCalledTimes(1); // retour au fonctionnement normal
+  });
+
   it('opération rejetée : rejected$ émet et l\'état est rechargé', async () => {
     api.sendOps.mockImplementationOnce(async (_id, ops) => ({
       seq: 6, results: [{ op_id: ops[0].op_id, result: 'rejected', reason: 'not_found' }],
