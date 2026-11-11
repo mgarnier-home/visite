@@ -63,12 +63,10 @@
 .chip {
   padding: 4px 10px;
   border-radius: 8px;
-  background: var(--mat-sys-surface-container-highest);
-  color: var(--mat-sys-on-surface-variant);
 }
-.chip-planned { background: var(--mat-sys-tertiary-container); color: var(--mat-sys-on-tertiary-container); }
-.chip-mail { background: var(--mat-sys-primary-container); color: var(--mat-sys-on-primary-container); }
-.chip-done { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+@each $s in contact, mail, planned, done, dropped {
+  .chip-#{$s} { background: var(--status-#{$s}-bg); color: var(--status-#{$s}-fg); }
+}
 
 .card {
   display: flex;

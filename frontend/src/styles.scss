@@ -37,3 +37,17 @@ body {
   height: 100%;
 }
 /* You can add global styles to this file, and also import other style files */
+
+// Couleurs des statuts d'annonce, reprises des maquettes ; réutilisées par l'accueil et l'onglet Annonce.
+:root {
+  --status-contact-bg: #e3e2e6;
+  --status-contact-fg: #44474e;
+  --status-mail-bg: #d7e3ff;
+  --status-mail-fg: #00458f;
+  --status-planned-bg: #ffdcc2;
+  --status-planned-fg: #6e3900;
+  --status-done-bg: #eaddff;
+  --status-done-fg: #4f378a;
+  --status-dropped-bg: transparent;
+  --status-dropped-fg: #44474e;
+}
