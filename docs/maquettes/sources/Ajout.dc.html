@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ajouter une annonce</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#005cbb}a:hover{color:#00458f}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #faf9fd; color: #1a1b1f; font-family: Roboto, system-ui, sans-serif">
+  <header style="display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 4px">
+    <a href="Main.dc.html" aria-label="Fermer" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </a>
+    <h1 style="margin: 0; font-size: 20px; font-weight: 500">Ajouter une annonce</h1>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 16px; padding: 8px 16px; flex-grow: 1">
+    <p style="margin: 0; font-size: 14px; line-height: 20px; color: #44474e">Dans l'appli Leboncoin, Jinka ou Bien'ici, touche « Partager », copie, puis colle ici. Le lien est repéré tout seul.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <label for="share" style="font-size: 12px; font-weight: 500; color: #005cbb">Texte partagé ou lien</label>
+      <textarea id="share" rows="6" style="box-sizing: border-box; width: 100%; padding: 12px; border: 2px solid #005cbb; border-radius: 6px; background: #ffffff; color: #1a1b1f; font: inherit; font-size: 15px; line-height: 22px; resize: none">Découvrez ce bien sur Bien'ici : Maison 5 pièces 118 m² à Vertou https://www.bienici.com/annonce/vente/vertou/maison/5pieces/agence-xyz-123456</textarea>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #eeedf1">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#005cbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
+        Lien Bien'ici repéré
+      </div>
+      <span style="font-size: 13px; color: #44474e; word-break: break-all">bienici.com/annonce/vente/vertou/maison/5pieces/agence-xyz-123456</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid #c4c6d0">
+      <span style="font-size: 13px; font-weight: 500; color: #44474e">Autres cas affichés au même endroit</span>
+      <span style="font-size: 13px; line-height: 18px; color: #44474e">« Aucun lien Leboncoin, Jinka ou Bien'ici dans ce texte »</span>
+      <span style="font-size: 13px; line-height: 18px; color: #44474e">« Cette annonce est déjà suivie » + lien vers sa fiche</span>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 12px; padding: 16px; border-top: 1px solid #e3e2e6">
+    <a href="Main.dc.html" style="flex-grow: 1; height: 48px; display: flex; align-items: center; justify-content: center; border: 1px solid #74777f; border-radius: 24px; color: #005cbb; font-size: 15px; font-weight: 500">Annuler</a>
+    <a href="Apercu.dc.html" style="flex-grow: 2; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 24px; background: #005cbb; color: #ffffff; font-size: 15px; font-weight: 500">Récupérer l'annonce</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

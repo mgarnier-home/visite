@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Accueil — annonces suivies</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 1180px; box-sizing: border-box; position: relative; background: #faf9fd; color: #1a1b1f; font-family: Roboto, system-ui, sans-serif; overflow: hidden">
+  <header style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 12px 16px; background: #faf9fd">
+    <div style="display: flex; flex-direction: column; flex-grow: 1">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 500">Visite</h1>
+      <span style="font-size: 13px; color: #44474e">6 annonces suivies · 3 écartées</span>
+    </div>
+    <button type="button" aria-label="Modèle de visite" style="width: 48px; height: 48px; border: 0; border-radius: 24px; background: transparent; color: #44474e; display: flex; align-items: center; justify-content: center">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 4h6M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2M9 12l2 2 4-4"></path></svg>
+    </button>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 20px; padding: 4px 16px 120px">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="4">
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #44474e">
+          <span style="{{sec.chip}}">{{sec.label}}</span>
+          <span>{{sec.count}}</span>
+        </h2>
+        <sc-for list="{{sec.items}}" as="it" hint-placeholder-count="2">
+          <a href="Annonce.dc.html" style="display: flex; gap: 12px; padding: 8px; background: #ffffff; border: 1px solid #e3e2e6; border-radius: 16px">
+            <div style="{{it.photo}}">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>
+              <span style="position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(26,27,31,0.78); color: #ffffff; font-size: 11px; font-weight: 500">{{it.source}}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex-grow: 1; padding-top: 2px">
+              <span style="font-size: 18px; font-weight: 700">{{it.price}}</span>
+              <span style="font-size: 13px; color: #1a1b1f">{{it.specs}}</span>
+              <span style="font-size: 13px; color: #44474e">{{it.city}}</span>
+              <span style="{{it.nextStyle}}">{{it.next}}</span>
+            </div>
+          </a>
+        </sc-for>
+      </section>
+    </sc-for>
+
+    <button type="button" style="display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 12px; border: 1px dashed #c4c6d0; border-radius: 12px; background: transparent; color: #44474e; font: inherit; font-size: 14px">
+      <span>Écartées (3)</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+  </div>
+
+  <a href="Ajout.dc.html" style="position: absolute; right: 16px; top: 760px; height: 56px; padding: 0 20px 0 16px; display: flex; align-items: center; gap: 10px; border-radius: 16px; background: #d7e3ff; color: #001b3f; font-size: 15px; font-weight: 500; box-shadow: 0 3px 8px rgba(0,0,0,0.18)">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    Ajouter une annonce
+  </a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const chips = {
+      planned: 'padding: 4px 10px; border-radius: 8px; background: #ffdcc2; color: #6e3900',
+      mail: 'padding: 4px 10px; border-radius: 8px; background: #d7e3ff; color: #00458f',
+      contact: 'padding: 4px 10px; border-radius: 8px; background: #e3e2e6; color: #44474e',
+      done: 'padding: 4px 10px; border-radius: 8px; background: #eaddff; color: #4f378a'
+    };
+    const photo = (bg) => 'position: relative; flex-shrink: 0; width: 112px; height: 112px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: ' + bg;
+    const next = (strong) => 'font-size: 13px; margin-top: auto; ' + (strong ? 'font-weight: 500; color: #00458f' : 'color: #44474e');
+    const sec = (key, label, items) => ({ chip: chips[key], label, count: String(items.length), items });
+    return {
+      sections: [
+        sec('planned', 'Visite planifiée', [
+          { photo: photo('#9fb3c8'), source: "Bien'ici", price: '345 000 €', specs: 'Maison · 5 p · 3 ch · 118 m²', city: 'Vertou · terrain 820 m²', next: 'Jeu. 14 nov · 10:30', nextStyle: next(true) }
+        ]),
+        sec('mail', 'Mail envoyé', [
+          { photo: photo('#b8a58c'), source: 'Leboncoin', price: '289 000 €', specs: 'Maison · 4 p · 3 ch · 96 m²', city: 'Rezé · terrain 450 m²', next: 'Envoyé le 8 nov', nextStyle: next(false) },
+          { photo: photo('#8fae9b'), source: 'Jinka', price: '412 000 €', specs: 'Maison · 6 p · 4 ch · 142 m²', city: 'Basse-Goulaine · terrain 1 200 m²', next: 'Envoyé le 10 nov', nextStyle: next(false) }
+        ]),
+        sec('contact', 'À contacter', [
+          { photo: photo('#a7a2c4'), source: "Bien'ici", price: '315 000 €', specs: 'Maison · 5 p · 3 ch · 110 m²', city: 'Bouguenais · terrain 600 m²', next: 'Ajoutée le 9 nov', nextStyle: next(false) },
+          { photo: photo('#c49a8f'), source: 'Leboncoin', price: '268 000 €', specs: 'Maison · 4 p · 2 ch · 88 m²', city: 'Saint-Sébastien · terrain 300 m²', next: 'Ajoutée hier', nextStyle: next(false) }
+        ]),
+        sec('done', 'Visite effectuée', [
+          { photo: photo('#9cb8b5'), source: "Bien'ici", price: '359 000 €', specs: 'Maison · 5 p · 4 ch · 125 m²', city: 'Les Sorinières · terrain 700 m²', next: 'Note 3,8 / 5 · voir le récap', nextStyle: next(true) }
+        ])
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

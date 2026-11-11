@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Fiche de l'annonce</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#005cbb}a:hover{color:#00458f}
+</style>
+</helmet>
+<div style="width: 390px; height: 1760px; box-sizing: border-box; display: flex; flex-direction: column; background: #faf9fd; color: #1a1b1f; font-family: Roboto, system-ui, sans-serif">
+  <header style="display: flex; align-items: center; gap: 4px; padding: 4px 4px 0">
+    <a href="Main.dc.html" aria-label="Retour à la liste" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+    </a>
+    <h1 style="margin: 0; flex-grow: 1; font-size: 20px; font-weight: 500">Maison · Vertou</h1>
+    <button type="button" aria-label="Plus d'actions" style="width: 48px; height: 48px; border: 0; border-radius: 24px; background: transparent; color: #44474e; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+    </button>
+  </header>
+  <nav aria-label="Onglets" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #e3e2e6; font-size: 14px; font-weight: 500">
+    <a href="#" aria-current="page" style="height: 48px; display: flex; align-items: center; justify-content: center; color: #005cbb; border-bottom: 3px solid #005cbb; box-sizing: border-box">Annonce</a>
+    <a href="#" style="height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">Pièces</a>
+    <a href="#" style="height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">Questions</a>
+    <a href="#" style="height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">Bilan</a>
+  </nav>
+  <div style="position: relative; height: 240px; background: #9fb3c8; display: flex; align-items: center; justify-content: center">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>
+    <span style="position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 12px; background: rgba(26,27,31,0.72); color: #ffffff; font-size: 12px; font-weight: 500">1 / 14</span>
+    <span style="position: absolute; left: 12px; bottom: 12px; padding: 4px 10px; border-radius: 12px; background: rgba(26,27,31,0.72); color: #ffffff; font-size: 12px; font-weight: 500">Bien'ici</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 20px; padding: 16px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 10px">
+        <span style="font-size: 26px; font-weight: 700">345 000 €</span>
+        <span style="font-size: 13px; color: #44474e">2 924 €/m²</span>
+      </div>
+      <span style="font-size: 15px">Maison · 5 pièces · 3 chambres · 118 m²</span>
+      <span style="font-size: 14px; color: #44474e">Vertou (44120) · terrain 820 m²</span>
+    </div>
+
+    <ol aria-label="Avancement" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+        <li style="display: flex; flex-direction: column; gap: 6px">
+          <span style="{{s.bar}}"></span>
+          <span style="{{s.labelStyle}}">{{s.label}}</span>
+          <span style="font-size: 11px; color: #44474e">{{s.date}}</span>
+        </li>
+      </sc-for>
+    </ol>
+
+    <div style="{{cardStyle}}">
+      <span style="font-size: 13px; font-weight: 500; color: #44474e">{{cardKicker}}</span>
+      <span style="font-size: 18px; font-weight: 500">{{cardTitle}}</span>
+      <span style="font-size: 14px; line-height: 20px; color: #44474e">{{cardText}}</span>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px">
+        <a href="#" style="height: 44px; padding: 0 20px; display: flex; align-items: center; border-radius: 22px; background: #005cbb; color: #ffffff; font-size: 14px; font-weight: 500">{{primary}}</a>
+        <a href="#" style="height: 44px; padding: 0 16px; display: flex; align-items: center; border-radius: 22px; border: 1px solid #74777f; font-size: 14px; font-weight: 500">{{secondary}}</a>
+      </div>
+    </div>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 500">Caractéristiques</h2>
+      <dl style="margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 10px">
+        <sc-for list="{{specs}}" as="r" hint-placeholder-count="12">
+          <div style="display: flex; flex-direction: column; gap: 1px; padding-bottom: 8px; border-bottom: 1px solid #e3e2e6">
+            <dt style="font-size: 12px; color: #44474e">{{r.k}}</dt>
+            <dd style="margin: 0; font-size: 15px; font-weight: 500">{{r.v}}</dd>
+          </div>
+        </sc-for>
+      </dl>
+      <button type="button" style="align-self: flex-start; height: 40px; padding: 0 4px; border: 0; background: transparent; color: #005cbb; font: inherit; font-size: 14px; font-weight: 500">Lire la description de l'annonce</button>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 500">Contact</h2>
+      <span style="font-size: 15px">Agence XYZ · Mme Martin</span>
+      <div style="display: flex; gap: 8px">
+        <a href="#" style="height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid #c4c6d0; font-size: 14px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"></path></svg>
+          02 40 00 00 00
+        </a>
+        <a href="#" style="height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid #c4c6d0; font-size: 14px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>
+          E-mail
+        </a>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 6px">
+      <label for="notes" style="font-size: 16px; font-weight: 500">Notes</label>
+      <textarea id="notes" rows="3" style="box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid #74777f; border-radius: 6px; background: #ffffff; color: #1a1b1f; font: inherit; font-size: 14px; line-height: 20px; resize: none">Agent sympa, vendeurs pressés (mutation). Demander si le prix est négociable.</textarea>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid #e3e2e6">
+      <a href="#" style="padding-top: 10px; font-size: 14px; font-weight: 500">Voir l'annonce sur Bien'ici</a>
+      <span style="font-size: 12px; color: #44474e">Ajoutée le 3 nov · infos récupérées le 3 nov</span>
+      <div style="display: flex; gap: 8px; margin-top: 6px">
+        <button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #74777f; border-radius: 20px; background: transparent; color: #44474e; font: inherit; font-size: 14px">Écarter</button>
+        <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 20px; background: transparent; color: #ba1a1a; font: inherit; font-size: 14px">Supprimer</button>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"statut":{"editor":"enum","options":["contact","mail","planned","done"],"default":"planned"},"$preview":{"width":390,"height":1760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.props.statut ?? 'planned';
+    const order = ['contact', 'mail', 'planned', 'done'];
+    const idx = order.indexOf(st);
+    const labels = ['À contacter', 'Mail envoyé', 'Visite planifiée', 'Visite effectuée'];
+    const dates = ['3 nov', '5 nov', '14 nov 10:30', '14 nov'];
+    const colors = ['#74777f', '#005cbb', '#b35c00', '#6750a4'];
+    const steps = labels.map((label, i) => ({
+      label,
+      date: i <= idx ? dates[i] : '',
+      bar: 'display: block; height: 6px; border-radius: 3px; background: ' + (i <= idx ? colors[idx] : '#e3e2e6'),
+      labelStyle: 'font-size: 12px; line-height: 15px; ' + (i === idx ? 'font-weight: 700; color: #1a1b1f' : 'color: #44474e')
+    }));
+    const cards = {
+      contact: { bg: '#eeedf1', kicker: 'Prochaine étape', title: 'Contacter l’agence', text: 'Une fois le mail envoyé, passe l’annonce à l’étape suivante pour garder la date.', primary: 'Mail envoyé', secondary: 'Planifier la visite' },
+      mail: { bg: '#d7e3ff', kicker: 'Mail envoyé le 5 nov', title: 'En attente de réponse', text: 'Quand l’agence répond, saisis la date de visite.', primary: 'Planifier la visite', secondary: 'Revenir à « À contacter »' },
+      planned: { bg: '#ffdcc2', kicker: 'Visite planifiée', title: 'Jeudi 14 novembre · 10:30', text: 'Sur place, tout se passe dans les onglets Pièces, Questions et Bilan.', primary: 'Visite effectuée', secondary: 'Changer la date' },
+      done: { bg: '#eaddff', kicker: 'Visite effectuée le 14 nov', title: 'Note 3,8 / 5 · 1 point bloquant', text: 'Travaux estimés 15 000 € · frais de notaire 25 875 €. La visite reste modifiable.', primary: 'Voir le bilan', secondary: 'Revenir à « Visite planifiée »' }
+    };
+    const c = cards[st];
+    return {
+      steps,
+      cardStyle: 'display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 16px; background: ' + c.bg,
+      cardKicker: c.kicker, cardTitle: c.title, cardText: c.text, primary: c.primary, secondary: c.secondary,
+      specs: [
+        { k: 'Pièces', v: '5' }, { k: 'Chambres', v: '3' },
+        { k: 'Salles de bain', v: '1 + 1 salle d’eau' }, { k: 'WC', v: '2' },
+        { k: 'Surface habitable', v: '118 m²' }, { k: 'Terrain', v: '820 m²' },
+        { k: 'Garage / parking', v: '1 place' }, { k: 'Année', v: '1978' },
+        { k: 'DPE / GES', v: 'D / E' }, { k: 'Chauffage', v: 'Non indiqué' },
+        { k: 'Équipements', v: 'Jardin, terrasse, cheminée' }, { k: 'Étages', v: 'Non indiqué' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

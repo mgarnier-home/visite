@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ajouter une annonce — infos récupérées</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#005cbb}a:hover{color:#00458f}
+</style>
+</helmet>
+<div style="width: 390px; height: 1380px; box-sizing: border-box; display: flex; flex-direction: column; background: #faf9fd; color: #1a1b1f; font-family: Roboto, system-ui, sans-serif">
+  <header style="display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 4px">
+    <a href="Ajout.dc.html" aria-label="Retour" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: #44474e">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+    </a>
+    <div style="display: flex; flex-direction: column">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 500">Vérifier les infos</h1>
+      <span style="font-size: 13px; color: #44474e">{{sourceLine}}</span>
+    </div>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 18px; padding: 8px 16px 16px; flex-grow: 1">
+    <sc-if value="{{blocked}}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="display: flex; gap: 10px; padding: 12px; border-radius: 12px; background: #ffdcc2; color: #5c2b00; font-size: 14px; line-height: 20px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0"><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <span>Leboncoin refuse la lecture automatique. Le titre a été repris du texte partagé ; complète le reste et ajoute des photos (captures d'écran).</span>
+      </div>
+    </sc-if>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 500">{{photosTitle}}</h2>
+      <div style="display: flex; gap: 8px; overflow: hidden">
+        <sc-for list="{{photos}}" as="p" hint-placeholder-count="4">
+          <div style="{{p}}">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>
+          </div>
+        </sc-for>
+        <button type="button" aria-label="Ajouter des photos" style="flex-shrink: 0; width: 96px; height: 96px; border: 1px dashed #74777f; border-radius: 12px; background: transparent; color: #005cbb; display: flex; align-items: center; justify-content: center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 500">Caractéristiques</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{fields}}" as="f" hint-placeholder-count="12">
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid #c4c6d0; border-radius: 6px; background: #ffffff">
+            <span style="font-size: 12px; color: #44474e">{{f.label}}</span>
+            <span style="{{f.style}}">{{f.value}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <span style="font-size: 13px; font-weight: 500; color: #44474e; margin-top: 4px">Équipements</span>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{extras}}" as="e" hint-placeholder-count="5">
+          <span style="{{e.style}}">{{e.label}}</span>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 500">Description de l'annonce</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #44474e">{{description}}</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 500">Statut de départ</h2>
+      <div style="display: flex; border: 1px solid #74777f; border-radius: 20px; overflow: hidden; font-size: 13px; font-weight: 500">
+        <span style="flex: 1; padding: 10px 4px; text-align: center; background: #d7e3ff; color: #001b3f">À contacter</span>
+        <span style="flex: 1; padding: 10px 4px; text-align: center; border-left: 1px solid #74777f; color: #44474e">Mail envoyé</span>
+        <span style="flex: 1; padding: 10px 4px; text-align: center; border-left: 1px solid #74777f; color: #44474e">Visite planifiée</span>
+      </div>
+    </section>
+  </div>
+
+  <div style="display: flex; gap: 12px; padding: 16px; border-top: 1px solid #e3e2e6">
+    <a href="Annonce.dc.html" style="flex-grow: 1; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 24px; background: #005cbb; color: #ffffff; font-size: 15px; font-weight: 500">Ajouter à la liste</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"site":{"editor":"enum","options":["bienici","leboncoin"],"default":"bienici"},"$preview":{"width":390,"height":1380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const lbc = (this.props.site ?? 'bienici') === 'leboncoin';
+    const tones = ['#9fb3c8', '#b8a58c', '#8fae9b', '#a7a2c4'];
+    const photo = (bg) => 'flex-shrink: 0; width: 96px; height: 96px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: ' + bg;
+    const filled = 'font-size: 15px; font-weight: 500; color: #1a1b1f';
+    const empty = 'font-size: 15px; color: #74777f';
+    const rows = [
+      ['Prix', '345 000 €', '289 000 €'],
+      ['Type', 'Maison', 'Maison'],
+      ['Pièces', '5', ''],
+      ['Chambres', '3', ''],
+      ['Salles de bain', '1 (+ 1 salle d’eau)', ''],
+      ['WC', '2', ''],
+      ['Surface habitable', '118 m²', '96 m²'],
+      ['Terrain', '820 m²', ''],
+      ['Garage / parking', '1 place', ''],
+      ['Année de construction', '1978', ''],
+      ['DPE / GES', 'D / E', ''],
+      ['Chauffage', '', ''],
+      ['Ville', 'Vertou (44120)', 'Rezé'],
+      ['Agence', 'Agence XYZ', '']
+    ];
+    const fields = rows.map(([label, b, l]) => {
+      const v = lbc ? l : b;
+      return { label, value: v || 'Non indiqué', style: v ? filled : empty };
+    });
+    const on = 'padding: 6px 12px; border-radius: 8px; background: #d7e3ff; color: #001b3f; font-size: 13px; font-weight: 500';
+    const off = 'padding: 6px 12px; border-radius: 8px; border: 1px solid #c4c6d0; color: #44474e; font-size: 13px';
+    const ex = [['Jardin', true], ['Terrasse', true], ['Cheminée', true], ['Piscine', false], ['Cave', false], ['Alarme', false]];
+    return {
+      blocked: lbc,
+      sourceLine: lbc ? 'Leboncoin · saisie manuelle' : "Bien'ici · récupéré à l’instant",
+      photosTitle: lbc ? 'Photos (0)' : 'Photos (14, copiées sur le serveur)',
+      photos: lbc ? [] : tones.map(photo),
+      fields,
+      extras: ex.map(([label, has]) => ({ label: has && !lbc ? label : label + ' ?', style: has && !lbc ? on : off })),
+      description: lbc ? 'Maison 4 pièces 96 m² (repris du texte partagé)' : 'Au calme, maison des années 70 rénovée en 2019 : séjour lumineux de 38 m² ouvert sur terrasse, cuisine équipée, 3 chambres dont une au rez-de-chaussée… (texte complet conservé)'
+    };
+  }
+}
+</script>
+</body>
+</html>
