@@ -33,7 +33,8 @@ par exemple depuis un cron (comptez environ une seconde par annonce) :
 curl -X POST http://localhost:8080/api/listings/refresh
 ```
 
-La réponse est un rapport (annonces mises à jour, retirées du site ou en échec).
+La réponse est un rapport (annonces mises à jour, retirées du site ou en échec). La requête dure environ
+une seconde ou plus par annonce : prévoir le délai d'attente du proxy inverse en conséquence.
 
 ## Variables d'environnement
 
@@ -95,7 +96,8 @@ docker run --rm -p 8099:8080 -v "$PWD/data":/data visite:dev
 Tout est sous `/data` dans le conteneur :
 
 - `/data/visite.db` : base SQLite (avec ses fichiers `-wal` et `-shm`) ;
-- `/data/photos/<id de l'annonce>/<pièce>/…` : photos, nommées `AAAAMMJJ-HHMMSS-<8 hex>.jpg`.
+- `/data/photos/<id de l'annonce>/<pièce>/…` : photos, nommées `AAAAMMJJ-HHMMSS-<8 hex>.jpg` ;
+- `/data/photos/listings/<id de l'annonce>/` : photos copiées depuis l'annonce.
 
 ## Synchronisation entre participants
 
