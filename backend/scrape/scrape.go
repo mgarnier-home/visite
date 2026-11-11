@@ -44,6 +44,8 @@ func (c *Client) Fetch(ctx context.Context, source, url string) (Result, error) 
 	switch source {
 	case SourceBienici:
 		return c.fetchBienici(ctx, url)
+	case SourceJinka:
+		return c.fetchJinka(ctx, url)
 	}
 	return Result{}, fmt.Errorf("source %q non récupérable", source)
 }
