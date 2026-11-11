@@ -1,6 +1,6 @@
 # Visite
 
-Application web (PWA) pour préparer, mener et comparer des visites de maisons à l'achat. Un
+Application web installable sur l'écran d'accueil (PWA, mais qui exige le réseau) pour préparer, mener et comparer des visites de maisons à l'achat. Un
 backend Go sert l'API et embarque l'application Angular ; les données sont stockées dans une base
 SQLite et un répertoire de photos.
 
@@ -30,7 +30,7 @@ Rien n'est rafraîchi automatiquement. Le bouton « Rafraîchir » d'une annonce
 par exemple depuis un cron (comptez environ une seconde par annonce) :
 
 ```sh
-curl -X POST -H 'X-Device-Id: cron' http://localhost:8080/api/listings/refresh
+curl -X POST http://localhost:8080/api/listings/refresh
 ```
 
 La réponse est un rapport (annonces mises à jour, retirées du site ou en échec).
