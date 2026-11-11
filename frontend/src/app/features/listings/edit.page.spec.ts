@@ -16,9 +16,10 @@ const listing = (over: Partial<Listing> = {}): Listing =>
     ...over,
   }) as Listing;
 
-async function setup(l: Listing, confirm = true) {
+async function setup(l: Listing, confirm = true, loadFails = false) {
+  const open = vi.fn(() => ({ afterClosed: () => of(confirm) }));
   const api = {
-    getListing: vi.fn().mockResolvedValue(l),
+    getListing: loadFails ? vi.fn().mockRejectedValue(new Error('x')) : vi.fn().mockResolvedValue(l),
     patchListing: vi.fn().mockResolvedValue(l),
     deleteListing: vi.fn().mockResolvedValue(undefined),
     listingPhotoUrl: (id: string, p: string) => `/p/${id}/${p}`,
@@ -29,7 +30,7 @@ async function setup(l: Listing, confirm = true) {
       provideRouter([]),
       { provide: ApiClient, useValue: api },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'l1' }) } } },
-      { provide: MatDialog, useValue: { open: () => ({ afterClosed: () => of(confirm) }) } },
+      { provide: MatDialog, useValue: { open } },
       provideAppIcons(),
     ],
   });
@@ -45,7 +46,7 @@ async function setup(l: Listing, confirm = true) {
     await fixture.whenStable();
     fixture.detectChanges();
   };
-  return { api, navigate, fixture, el, field, click };
+  return { api, open, navigate, fixture, el, field, click };
 }
 
 describe('EditPage', () => {
@@ -84,13 +85,41 @@ describe('EditPage', () => {
     expect(id).toBe('l1');
     expect(body).toMatchObject({ price_eur: 300000, status: 'mail', rooms: 5, bedrooms: null, living_area_m2: 118.5 });
     expect(body.features).toEqual(['garden', 'pool']);
-    expect(s.navigate).toHaveBeenCalledWith(['/annonces', 'l1']);
+    expect(s.navigate).toHaveBeenCalledWith(['/annonces', 'l1'], { replaceUrl: true });
   });
 
   it('« Annuler » confirme, supprime et revient à l\'accueil', async () => {
     const s = await setup(listing());
     await s.click('[data-test=cancel]');
     expect(s.api.deleteListing).toHaveBeenCalledWith('l1');
+    expect(s.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('après l\'enregistrement, « Annuler » ne supprime rien', async () => {
+    const s = await setup(listing());
+    await s.click('[data-test=save]');
+    await (s.fixture.componentInstance as unknown as { cancel(): Promise<void> }).cancel();
+    expect(s.api.deleteListing).not.toHaveBeenCalled();
+    expect(s.open).not.toHaveBeenCalled();
+  });
+
+  it('pendant l\'enregistrement, « Annuler » ne fait rien', async () => {
+    const s = await setup(listing());
+    s.api.patchListing.mockReturnValue(new Promise(() => undefined));
+    s.el.querySelector<HTMLElement>('[data-test=save]')!.click();
+    s.fixture.detectChanges();
+    expect(s.el.querySelector<HTMLButtonElement>('[data-test=cancel]')!.disabled).toBe(true);
+    expect(s.el.querySelector<HTMLButtonElement>('[data-test=back]')!.disabled).toBe(true);
+    await (s.fixture.componentInstance as unknown as { cancel(): Promise<void> }).cancel();
+    expect(s.api.deleteListing).not.toHaveBeenCalled();
+    expect(s.open).not.toHaveBeenCalled();
+  });
+
+  it('erreur de chargement : la flèche va à l\'accueil sans supprimer', async () => {
+    const s = await setup(listing(), true, true);
+    await s.click('[data-test=back]');
+    expect(s.api.deleteListing).not.toHaveBeenCalled();
+    expect(s.open).not.toHaveBeenCalled();
     expect(s.navigate).toHaveBeenCalledWith(['/']);
   });
 

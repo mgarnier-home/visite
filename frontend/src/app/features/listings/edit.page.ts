@@ -61,6 +61,8 @@ export class EditPage {
   protected readonly loadError = signal(false);
   protected readonly saveError = signal('');
   protected readonly busy = signal(false);
+  /** Une fois l'annonce enregistrée, plus aucune annulation possible (retour arrière du navigateur). */
+  protected readonly saved = signal(false);
   protected readonly values = signal<Record<string, string>>({});
   protected readonly features = signal<string[]>([]);
   protected readonly status = signal<ListingStatus>('contact');
@@ -119,7 +121,8 @@ export class EditPage {
     this.saveError.set('');
     try {
       await this.api.patchListing(this.id, patch as Partial<Listing>);
-      await this.router.navigate(['/annonces', this.id]);
+      this.saved.set(true);
+      await this.router.navigate(['/annonces', this.id], { replaceUrl: true });
     } catch (e) {
       this.saveError.set(e instanceof Error ? e.message : 'Enregistrement impossible');
     } finally {
@@ -127,7 +130,13 @@ export class EditPage {
     }
   }
 
+  /** Flèche de retour : simple sortie si rien n'a été chargé, sinon annulation confirmée. */
+  protected back(): Promise<unknown> | void {
+    return this.listing() ? this.cancel() : this.router.navigate(['/']);
+  }
+
   protected async cancel(): Promise<void> {
+    if (this.busy() || this.saved()) return;
     const ok = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {

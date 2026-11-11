@@ -1,5 +1,5 @@
 <header class="top">
-  <button mat-icon-button type="button" aria-label="Annuler l'ajout" (click)="cancel()"><mat-icon svgIcon="arrow_back" /></button>
+  <button mat-icon-button type="button" aria-label="Annuler l'ajout" data-test="back" [disabled]="busy() || saved()" (click)="back()"><mat-icon svgIcon="arrow_back" /></button>
   <div class="heading">
     <h1>Vérifier les infos</h1>
     <span data-test="source">{{ sourceLine() }}</span>
@@ -78,7 +78,7 @@
   </main>
 
   <footer>
-    <button mat-stroked-button type="button" data-test="cancel" (click)="cancel()">Annuler</button>
+    <button mat-stroked-button type="button" data-test="cancel" [disabled]="busy() || saved()" (click)="cancel()">Annuler</button>
     <button mat-flat-button type="button" data-test="save" [disabled]="!canSave()" (click)="save()">Ajouter à la liste</button>
   </footer>
 }
