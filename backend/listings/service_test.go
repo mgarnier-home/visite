@@ -163,3 +163,15 @@ func TestCreateFetchError(t *testing.T) {
 		t.Errorf("%d annonces créées, voulu 0", len(ls))
 	}
 }
+
+func TestCreateManualRawLink(t *testing.T) {
+	e := newEnv(t)
+	l, err := e.svc.Create(context.Background(),
+		"J'ai trouvé une annonce qui devrait vous intéresser sur leboncoin\n\n https://www.leboncoin.fr/ad/ventes_immobilieres/3306963410?utm_source=x#top")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "J'ai trouvé une annonce qui devrait vous intéresser sur leboncoin"; l.Title != want {
+		t.Errorf("titre = %q", l.Title)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,6 +30,9 @@ var ErrFetch = errors.New("le site n'a pas renvoyé l'annonce")
 type DuplicateError struct{ ID string }
 
 func (DuplicateError) Error() string { return "annonce déjà suivie" }
+
+// rawLinkRe : même motif que scrape.FindURL, pour retirer le lien tel que collé (avec requête et fragment).
+var rawLinkRe = regexp.MustCompile(`https://\S+`)
 
 const maxPhoto = 15 << 20
 
@@ -62,7 +66,7 @@ func (s *Service) Create(ctx context.Context, text string) (model.Listing, error
 	l := model.Listing{Source: source, URL: url}
 	var res scrape.Result
 	if source == scrape.SourceManual {
-		l.Title = strings.Join(strings.Fields(strings.Replace(text, url, "", 1)), " ")
+		l.Title = strings.Join(strings.Fields(rawLinkRe.ReplaceAllString(text, "")), " ")
 	} else {
 		var err error
 		if res, err = s.Fetcher.Fetch(ctx, source, url); err != nil {
