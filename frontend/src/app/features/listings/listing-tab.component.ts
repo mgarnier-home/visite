@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -46,6 +46,8 @@ export class ListingTabComponent {
 
   constructor() {
     onPageHidden(() => void this.saveNotes());
+    // navigation sans blur (retour du navigateur, lien Accueil) : le brouillon part quand même
+    inject(DestroyRef).onDestroy(() => void this.saveNotes());
   }
 
   protected readonly statusLabels = STATUS_LABELS;
@@ -180,6 +182,12 @@ export class ListingTabComponent {
       this.current.listing.set(await this.api.refreshListing(l.id));
     } catch (e) {
       this.refreshError.set(e instanceof ApiError ? e.message : 'Rafraîchissement impossible');
+      // le serveur a gardé fetch_error : on relit l'annonce pour afficher le bandeau
+      try {
+        this.current.listing.set(await this.api.getListing(l.id));
+      } catch {
+        // le message inline suffit
+      }
     } finally {
       this.busy.set(false);
     }

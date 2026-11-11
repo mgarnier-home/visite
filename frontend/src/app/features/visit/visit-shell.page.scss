@@ -30,3 +30,10 @@ header {
   margin: 0 auto;
   padding: 16px;
 }
+
+/* quatre onglets de largeur égale, sans pagination (maquette 4) */
+a[mat-tab-link] {
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 0 4px;
+}

@@ -28,7 +28,7 @@
         <app-sync-indicator />
       </header>
 
-      <nav mat-tab-nav-bar [tabPanel]="panel">
+      <nav mat-tab-nav-bar mat-stretch-tabs [disablePagination]="true" [tabPanel]="panel">
         @for (t of tabs; track t.path) {
           <a mat-tab-link [routerLink]="['/annonces', id(), t.path]" routerLinkActive #rla="routerLinkActive" [active]="rla.isActive"
             [matBadge]="t.path === 'questions' ? unasked() : null" matBadgeSize="small" [matBadgeOverlap]="false"

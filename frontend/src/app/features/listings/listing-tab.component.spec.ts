@@ -28,6 +28,7 @@ describe('ListingTabComponent', () => {
     patchListing: vi.fn(),
     refreshListing: vi.fn(),
     deleteListing: vi.fn(),
+    getListing: vi.fn(),
     listingPhotoUrl: (id: string, p: string) => `/p/${id}/${p}`,
   };
   const snack = { open: vi.fn() };
@@ -199,6 +200,15 @@ describe('ListingTabComponent', () => {
     });
   });
 
+  it('notes non validées par un blur : envoyées à la destruction', async () => {
+    const { fixture, el } = await setup('contact');
+    const area = q(el, 'textarea') as HTMLTextAreaElement;
+    area.value = 'Rappeler lundi';
+    area.dispatchEvent(new Event('input'));
+    fixture.destroy();
+    expect(api.patchListing).toHaveBeenCalledWith('l1', { notes: 'Rappeler lundi' });
+  });
+
   describe('rafraîchir', () => {
     it('absent en saisie manuelle', async () => {
       const { el } = await setup('contact', { source: 'manual' });
@@ -217,10 +227,13 @@ describe('ListingTabComponent', () => {
 
     it('502 : message du serveur', async () => {
       api.refreshListing.mockRejectedValue(new ApiError(502, 'Le site ne répond pas'));
+      api.getListing.mockResolvedValue(make('contact', { fetch_error: 'site injoignable' }));
       const { el, settle } = await setup('contact');
       btn(el, 'Rafraîchir')!.click();
       await settle();
       expect(text(el, '[data-test=refresh-error]')).toBe('Le site ne répond pas');
+      expect(api.getListing).toHaveBeenCalledWith('l1');
+      expect(text(el, '[data-test=fetch-error]')).toBe('Dernière récupération en échec : site injoignable');
     });
   });
 
